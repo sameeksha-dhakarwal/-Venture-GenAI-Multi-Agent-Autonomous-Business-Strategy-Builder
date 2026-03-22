@@ -10,18 +10,20 @@ def competitor_agent(state):
     context = "\n".join([d.page_content for d in docs])
 
     prompt = f"""
-    Analyze competitors for:
-    {idea}
+Analyze competitors for:
 
-    Context:
-    {context}
+{idea}
 
-    Provide:
-    - Top competitors
-    - SWOT analysis
-    """
+Context:
+{context}
 
-    result = llm.predict(prompt)
-    state["competitors"] = result
+Provide:
+- Competitor List
+- SWOT Analysis
+- Competitive Gaps
+"""
 
+    output = llm.invoke(prompt).content
+
+    state["competitors"] = output
     return state

@@ -4,16 +4,30 @@ llm = get_llm()
 
 def pitch_agent(state):
     prompt = f"""
-    Create a pitch deck:
+Create a startup pitch deck.
 
-    Market: {state['market']}
-    Business: {state['business_model']}
-    Financials: {state['financials']}
+Market:
+{state['market']}
 
-    Provide slide-wise structure.
-    """
+Business:
+{state['business_model']}
 
-    result = llm.predict(prompt)
+Financials:
+{state['financials']}
+
+Give:
+Slide 1: Title
+Slide 2: Problem
+Slide 3: Solution
+Slide 4: Market
+Slide 5: Business Model
+Slide 6: Financials
+
+Answer:
+"""
+
+    output = llm.invoke(prompt).content
+    result = output.replace(prompt, "").strip()
+
     state["pitch_deck"] = result
-
     return state

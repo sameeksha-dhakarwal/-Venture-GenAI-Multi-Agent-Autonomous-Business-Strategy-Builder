@@ -1,11 +1,7 @@
-from langchain_openai import ChatOpenAI
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from langchain_community.chat_models import ChatOllama
 
 def get_llm():
-    return ChatOpenAI(
-        model="gpt-4",
+    return ChatOllama(
+        model="mistral",
         temperature=0.7
     )

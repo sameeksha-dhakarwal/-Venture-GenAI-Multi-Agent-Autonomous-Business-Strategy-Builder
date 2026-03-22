@@ -6,16 +6,20 @@ def finance_agent(state):
     idea = state["idea"]
 
     prompt = f"""
-    Generate financial projections for:
-    {idea}
+Startup Idea: {idea}
 
-    Include:
-    - Revenue (3 years)
-    - Costs
-    - Break-even
-    """
+Generate financial projections.
 
-    result = llm.predict(prompt)
+Give:
+1. Revenue (3 years)
+2. Costs
+3. Break-even Point
+
+Answer:
+"""
+
+    output = llm.invoke(prompt).content
+    result = output.replace(prompt, "").strip()
+
     state["financials"] = result
-
     return state
