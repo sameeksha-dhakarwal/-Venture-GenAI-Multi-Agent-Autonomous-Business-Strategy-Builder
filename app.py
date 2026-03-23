@@ -1,11 +1,29 @@
 import streamlit as st
-from agents.orchestrator import graph
+from agents.market_agent import market_agent
+from agents.competitor_agent import competitor_agent
+from agents.business_agent import business_agent
+from agents.finance_agent import finance_agent
+from agents.pitch_agent import pitch_agent
 
+# 🔧 PAGE CONFIG
+st.set_page_config(page_title="Venture GenAI", layout="wide")
+
+# 🎯 HEADER
 st.title("🚀 Venture GenAI")
+st.subheader("Multi-Agent AI Startup Strategy Builder")
+st.caption("Powered by RAG + Multi-Agent AI + Mistral (Ollama)")
 
-idea = st.text_input("Enter your startup idea")
+# 🧠 INPUT
+idea = st.text_input("Enter your startup idea:")
 
-if st.button("Generate"):
+# 🚫 VALIDATION
+if st.button("Generate Strategy"):
+
+    if idea.strip() == "":
+        st.warning("⚠️ Please enter a startup idea")
+        st.stop()
+
+    # 🧾 STATE
     state = {
         "idea": idea,
         "market": "",
@@ -15,19 +33,78 @@ if st.button("Generate"):
         "pitch_deck": ""
     }
 
-    result = graph.invoke(state)
+    # ⏳ LOADING
+    with st.spinner("🤖 AI Agents Working... Please wait..."):
+        state = market_agent(state)
+        state = competitor_agent(state)
+        state = business_agent(state)
+        state = finance_agent(state)
+        state = pitch_agent(state)
 
-    st.header("Market Research")
-    st.write(result["market"])
+    # ✅ SUCCESS
+    st.success("✅ Analysis Complete!")
 
-    st.header("Competitor Analysis")
-    st.write(result["competitors"])
+    # 📊 TABS UI
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🌍 Market",
+        "🏢 Competitors",
+        "🧠 Business",
+        "📊 Financials",
+        "🎤 Pitch"
+    ])
 
-    st.header("Business Model")
-    st.write(result["business_model"])
+    with tab1:
+        st.markdown(state["market"])
 
-    st.header("Financials")
-    st.write(result["financials"])
+    with tab2:
+        st.markdown(state["competitors"])
 
-    st.header("Pitch Deck")
-    st.write(result["pitch_deck"])
+    with tab3:
+        st.markdown(state["business_model"])
+
+    with tab4:
+        st.markdown(state["financials"])
+
+    with tab5:
+        st.markdown(state["pitch_deck"])
+
+    # 🔥 DOWNLOAD REPORT FEATURE
+    full_report = f"""
+===============================
+🚀 VENTURE GENAI REPORT
+===============================
+
+IDEA:
+{state['idea']}
+
+-------------------------------
+🌍 MARKET ANALYSIS
+-------------------------------
+{state['market']}
+
+-------------------------------
+🏢 COMPETITOR ANALYSIS
+-------------------------------
+{state['competitors']}
+
+-------------------------------
+🧠 BUSINESS MODEL
+-------------------------------
+{state['business_model']}
+
+-------------------------------
+📊 FINANCIALS
+-------------------------------
+{state['financials']}
+
+-------------------------------
+🎤 PITCH DECK
+-------------------------------
+{state['pitch_deck']}
+"""
+
+    st.download_button(
+        label="📥 Download Full Report",
+        data=full_report,
+        file_name="venture_genai_report.txt"
+    )
