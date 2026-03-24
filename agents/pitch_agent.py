@@ -26,7 +26,7 @@ Slide 6: Financials
 Answer:
 """
 
-    output = llm.invoke(prompt).content
+    output = llm.invoke(prompt[:1500])
     result = output.replace(prompt, "").strip()
 
     state["pitch_deck"] = result

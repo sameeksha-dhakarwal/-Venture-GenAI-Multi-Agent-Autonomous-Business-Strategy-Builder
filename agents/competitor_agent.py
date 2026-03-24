@@ -23,7 +23,7 @@ Provide:
 - Competitive Gaps
 """
 
-    output = llm.invoke(prompt).content
+    output = llm.invoke(prompt[:1500])
 
     state["competitors"] = output
     return state

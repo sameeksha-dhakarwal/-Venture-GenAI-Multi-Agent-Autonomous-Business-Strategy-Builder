@@ -1,10 +1,17 @@
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
-def retrieve(query, k=3):
-    db = FAISS.load_local(
-        "rag/startup_index",
-        HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
-        allow_dangerous_deserialization=True
-    )
-    return db.similarity_search(query, k=k)
+# ✅ LOAD ONCE (GLOBAL)
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2"
+)
+
+# ✅ LOAD DB ONCE
+db = FAISS.load_local(
+    "vectorstore",
+    embeddings,
+    allow_dangerous_deserialization=True
+)
+
+def retrieve(query):
+    return db.similarity_search(query, k=3)

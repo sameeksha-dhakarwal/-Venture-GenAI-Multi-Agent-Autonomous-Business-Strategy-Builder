@@ -18,7 +18,7 @@ Give:
 Answer:
 """
 
-    result = llm.invoke(prompt).content
+    result = llm.invoke(prompt[:1500])
 
     state["business_model"] = result
     return state

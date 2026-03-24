@@ -54,7 +54,7 @@ Keep answers concise and professional.
 """
 
     try:
-        response = llm.invoke(prompt).content
+        response = llm.invoke(prompt[:1500])
 
         # 🔥 BASIC VALIDATION
         if len(response) > 100:
