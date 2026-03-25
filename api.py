@@ -6,11 +6,11 @@ from agents.competitor_agent import competitor_agent
 from agents.business_agent import business_agent
 from agents.finance_agent import finance_agent
 from agents.pitch_agent import pitch_agent
-
+from auth import router as auth_router
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
-
+app.include_router(auth_router)
 # ✅ Enable CORS (important for Vite)
 app.add_middleware(
     CORSMiddleware,

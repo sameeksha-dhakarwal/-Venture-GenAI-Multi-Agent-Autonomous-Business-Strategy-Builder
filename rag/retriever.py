@@ -8,7 +8,7 @@ embeddings = HuggingFaceEmbeddings(
 
 # ✅ LOAD DB ONCE
 db = FAISS.load_local(
-    "vectorstore",
+    "rag/startup_index",
     embeddings,
     allow_dangerous_deserialization=True
 )
