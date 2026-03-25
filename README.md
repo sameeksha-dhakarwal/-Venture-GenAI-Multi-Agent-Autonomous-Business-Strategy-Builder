@@ -1,11 +1,12 @@
 Terminal 1
 ollama run mistral
-
+---
 Terminal 2
 cd "E:\Venture GenAI\Venturegenai"
 venv\Scripts\activate
 python -m uvicorn api:app --reload
-
+---
 Terminal 3
 cd venture-ui
 npm run dev
+---
