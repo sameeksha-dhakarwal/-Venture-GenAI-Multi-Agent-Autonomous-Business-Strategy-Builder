@@ -21,6 +21,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   // 🚀 APP STATE
   const [idea, setIdea] = useState("");
@@ -33,37 +34,43 @@ function App() {
     if (!idea) return;
 
     setLoading(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idea }),
+      });
 
-    const res = await fetch("http://127.0.0.1:8000/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ idea }),
-    });
-
-    const result = await res.json();
-    setData(result);
+      const result = await res.json();
+      setData(result);
+      setActiveTab("market");
+    } catch {
+      alert("Backend not running");
+    }
     setLoading(false);
-    setActiveTab("market");
   };
 
   // 🔐 LOGIN
   const login = async () => {
-    const res = await fetch("http://127.0.0.1:8000/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const res = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const result = await res.json();
+      const result = await res.json();
 
-    if (result.user) {
-      setUser(result.user);
+      if (result.user) {
+        setUser(result.user);
+        setSuccessMessage("✅ Login successful");
+        setShowAuth(null);
+      } else {
+        alert(result.detail || "Invalid credentials");
+      }
+    } catch {
+      alert("Backend not running");
     }
-
-    alert(result.message);
-    setShowAuth(null);
   };
 
   // 🔐 REGISTER
@@ -73,20 +80,29 @@ function App() {
       return;
     }
 
-    const res = await fetch("http://127.0.0.1:8000/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        password,
-      }),
-    });
+    try {
+      const res = await fetch("http://127.0.0.1:8000/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password,
+        }),
+      });
 
-    const result = await res.json();
-    alert(result.message);
-    setShowAuth(null);
+      const result = await res.json();
+
+      if (result.message) {
+        setSuccessMessage("✅ Account created successfully!");
+        setShowAuth(null);
+      } else {
+        alert(result.detail || "Registration failed");
+      }
+    } catch {
+      alert("Backend not running");
+    }
   };
 
   const logout = () => {
@@ -115,6 +131,9 @@ function App() {
     { icon: Sparkles, title: "AI Agents", desc: "Multi-agent system" }
   ];
 
+  const inputClass =
+    "w-full p-3 mb-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500";
+
   const renderContent = () => {
     if (!data && activeTab !== "dashboard") {
       return <p className="text-gray-300">Generate strategy first</p>;
@@ -141,6 +160,13 @@ function App() {
     return (
       <div className="min-h-screen text-white bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
+        {/* SUCCESS POPUP */}
+        {successMessage && (
+          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-lg shadow-lg">
+            {successMessage}
+          </div>
+        )}
+
         {/* NAVBAR */}
         <div className="flex justify-between items-center p-6">
           <h1 className="text-xl font-bold">🚀 Venture GenAI</h1>
@@ -161,8 +187,10 @@ function App() {
                 />
 
                 {showProfile && (
-                  <div className="absolute right-0 mt-2 bg-white text-black p-3 rounded shadow">
-                    <p>{user.first_name} {user.last_name}</p>
+                  <div className="absolute right-0 mt-2 bg-white text-black p-3 rounded shadow-lg w-40">
+                    <p className="font-semibold">
+                      {user.first_name} {user.last_name}
+                    </p>
                     <button className="text-blue-600 text-sm mt-2">
                       Change Password
                     </button>
@@ -181,14 +209,14 @@ function App() {
               <>
                 <button
                   onClick={() => setShowAuth("login")}
-                  className="px-4 py-2 border border-white/20 rounded-lg hover:bg-white/10"
+                  className="px-4 py-2 border rounded-lg hover:bg-white/10"
                 >
                   Login
                 </button>
 
                 <button
                   onClick={() => setShowAuth("register")}
-                  className="px-4 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-700"
+                  className="px-4 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-500"
                 >
                   Create Account
                 </button>
@@ -198,7 +226,7 @@ function App() {
         </div>
 
         {/* HERO */}
-        <div className="flex flex-col items-center text-center mt-20">
+        <div className="flex flex-col items-center text-center mt-20 px-4">
           <h1 className="text-5xl font-bold mb-4">
             Build Your Startup with AI 🚀
           </h1>
@@ -209,9 +237,9 @@ function App() {
 
           <div className="grid grid-cols-3 gap-6 mt-10 max-w-4xl">
             {features.map((f, i) => (
-              <div key={i} className="glass p-6 hover:scale-105 transition">
+              <div key={i} className="p-6 bg-white/5 backdrop-blur-lg rounded-xl border border-white/10 hover:scale-105 transition">
                 <f.icon className="mb-3 text-emerald-400" size={28} />
-                <h3>{f.title}</h3>
+                <h3 className="font-semibold">{f.title}</h3>
                 <p className="text-sm text-gray-300">{f.desc}</p>
               </div>
             ))}
@@ -219,7 +247,7 @@ function App() {
 
           <button
             onClick={() => setActiveTab("dashboard")}
-            className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-700"
+            className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500 transition"
           >
             Start Building 🚀
           </button>
@@ -228,7 +256,7 @@ function App() {
         {/* 🔐 AUTH MODAL */}
         {showAuth && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/60">
-            <div className="glass p-6 w-[320px]">
+            <div className="bg-white/10 backdrop-blur-xl p-6 rounded-xl w-[350px] border border-white/20 shadow-xl">
 
               <h2 className="text-xl mb-4">
                 {showAuth === "login" ? "Login" : "Create Account"}
@@ -236,29 +264,26 @@ function App() {
 
               {showAuth === "register" && (
                 <>
-                  <input placeholder="First Name" className="input" onChange={(e)=>setFirstName(e.target.value)} />
-                  <input placeholder="Last Name" className="input" onChange={(e)=>setLastName(e.target.value)} />
+                  <input className={inputClass} placeholder="First Name" onChange={(e)=>setFirstName(e.target.value)} />
+                  <input className={inputClass} placeholder="Last Name" onChange={(e)=>setLastName(e.target.value)} />
                 </>
               )}
 
-              <input placeholder="Email" className="input" onChange={(e)=>setEmail(e.target.value)} />
-              <input type="password" placeholder="Password" className="input" onChange={(e)=>setPassword(e.target.value)} />
+              <input className={inputClass} placeholder="Email" onChange={(e)=>setEmail(e.target.value)} />
+              <input type="password" className={inputClass} placeholder="Password" onChange={(e)=>setPassword(e.target.value)} />
 
               {showAuth === "register" && (
-                <input type="password" placeholder="Confirm Password" className="input" onChange={(e)=>setConfirmPassword(e.target.value)} />
+                <input type="password" className={inputClass} placeholder="Confirm Password" onChange={(e)=>setConfirmPassword(e.target.value)} />
               )}
 
               <button
                 onClick={showAuth === "login" ? login : register}
-                className="w-full bg-emerald-600 p-2 rounded mt-2"
+                className="w-full bg-emerald-600 p-3 rounded mt-2 hover:bg-emerald-500 transition"
               >
                 Submit
               </button>
 
-              <button
-                onClick={() => setShowAuth(null)}
-                className="mt-3 text-sm text-gray-400"
-              >
+              <button onClick={() => setShowAuth(null)} className="mt-3 text-sm text-gray-400">
                 Close
               </button>
             </div>
@@ -268,14 +293,12 @@ function App() {
     );
   }
 
-  // 📊 DASHBOARD
+  // DASHBOARD
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
 
-      {/* SIDEBAR */}
-      <div className="w-64 p-6 space-y-4 bg-emerald-700/90 backdrop-blur-xl">
+      <div className="w-64 p-6 space-y-4 bg-emerald-700/90">
         <h2 className="text-2xl font-bold mb-6">Venture GenAI</h2>
-
         <SidebarItem icon={Home} label="Dashboard" tab="dashboard" />
         <SidebarItem icon={Globe} label="Market" tab="market" />
         <SidebarItem icon={Brain} label="Business" tab="business" />
@@ -284,9 +307,7 @@ function App() {
         <SidebarItem icon={Building2} label="Competitor" tab="competitor" />
       </div>
 
-      {/* MAIN */}
-      <div className="flex-1 p-8 overflow-y-auto">
-
+      <div className="flex-1 p-8">
         <input
           value={idea}
           onChange={(e) => setIdea(e.target.value)}
@@ -294,18 +315,13 @@ function App() {
           className="w-[400px] p-3 rounded-xl bg-white/10 border border-white/20"
         />
 
-        <button
-          onClick={generate}
-          className="ml-4 px-6 py-3 bg-emerald-600 rounded-xl"
-        >
+        <button onClick={generate} className="ml-4 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500">
           Generate
         </button>
 
         {loading && <p className="mt-2">🤖 Generating...</p>}
 
-        <div className="mt-6">
-          {renderContent()}
-        </div>
+        <div className="mt-6">{renderContent()}</div>
       </div>
     </div>
   );
