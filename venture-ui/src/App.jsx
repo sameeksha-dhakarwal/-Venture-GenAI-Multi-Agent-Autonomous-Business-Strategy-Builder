@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Home,
   Globe,
@@ -7,8 +7,8 @@ import {
   Mic,
   Building2,
   Sparkles,
-  User
 } from "lucide-react";
+import Topbar from "./components/Topbar";
 
 function App() {
   // 🔐 AUTH STATE
@@ -29,9 +29,19 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("landing");
 
+  // 🔥 AUTO HIDE SUCCESS POPUP
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage("");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
   // 🚀 GENERATE
   const generate = async () => {
-    if (!idea) return;
+    if (!idea.trim()) return alert("Enter an idea");
 
     setLoading(true);
     try {
@@ -42,16 +52,20 @@ function App() {
       });
 
       const result = await res.json();
+      if (!res.ok) throw new Error(result.detail);
+
       setData(result);
       setActiveTab("market");
-    } catch {
-      alert("Backend not running");
+    } catch (err) {
+      alert(err.message || "Error generating data");
     }
     setLoading(false);
   };
 
   // 🔐 LOGIN
   const login = async () => {
+    if (!email || !password) return alert("Fill all fields");
+
     try {
       const res = await fetch("http://127.0.0.1:8000/login", {
         method: "POST",
@@ -60,24 +74,25 @@ function App() {
       });
 
       const result = await res.json();
+      if (!res.ok) throw new Error(result.detail);
 
-      if (result.user) {
-        setUser(result.user);
-        setSuccessMessage("✅ Login successful");
-        setShowAuth(null);
-      } else {
-        alert(result.detail || "Invalid credentials");
-      }
-    } catch {
-      alert("Backend not running");
+      setUser(result.user);
+      setSuccessMessage("✅ Login successful");
+      setShowAuth(null);
+      setActiveTab("dashboard");
+    } catch (err) {
+      alert(err.message);
     }
   };
 
   // 🔐 REGISTER
   const register = async () => {
+    if (!firstName || !lastName || !email || !password || !confirmPassword) {
+      return alert("Fill all fields");
+    }
+
     if (password !== confirmPassword) {
-      alert("Passwords do not match");
-      return;
+      return alert("Passwords do not match");
     }
 
     try {
@@ -93,15 +108,36 @@ function App() {
       });
 
       const result = await res.json();
+      if (!res.ok) throw new Error(result.detail);
 
-      if (result.message) {
-        setSuccessMessage("✅ Account created successfully!");
-        setShowAuth(null);
-      } else {
-        alert(result.detail || "Registration failed");
-      }
-    } catch {
-      alert("Backend not running");
+      setSuccessMessage("✅ Account created successfully!");
+      setShowAuth(null);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // 🔐 CHANGE PASSWORD
+  const changePassword = async () => {
+    const newPassword = prompt("Enter new password:");
+    if (!newPassword) return;
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          new_password: newPassword,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.detail);
+
+      setSuccessMessage("✅ Password updated");
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -132,7 +168,7 @@ function App() {
   ];
 
   const inputClass =
-    "w-full p-3 mb-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500";
+    "w-full p-3 mb-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400";
 
   const renderContent = () => {
     if (!data && activeTab !== "dashboard") {
@@ -141,7 +177,7 @@ function App() {
 
     switch (activeTab) {
       case "market":
-        return <pre className="whitespace-pre-wrap">{data.market}</pre>;
+        return <pre>{data.market}</pre>;
       case "business":
         return <pre>{data.business_model}</pre>;
       case "finance":
@@ -160,107 +196,63 @@ function App() {
     return (
       <div className="min-h-screen text-white bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
-        {/* SUCCESS POPUP */}
         {successMessage && (
-          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-lg shadow-lg">
+          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-xl shadow-lg">
             {successMessage}
           </div>
         )}
 
-        {/* NAVBAR */}
-        <div className="flex justify-between items-center p-6">
-          <h1 className="text-xl font-bold">🚀 Venture GenAI</h1>
+        {/* ✅ FIXED HEADER */}
+        <div className="flex justify-between items-center px-10 py-6">
+          <h1 className="text-2xl font-bold">🚀 Venture GenAI</h1>
 
-          <div className="flex gap-4 items-center">
+          {!user && (
+            <div className="flex items-center gap-6">
+              <button
+                onClick={() => setShowAuth("login")}
+                className="px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition"
+              >
+                Login
+              </button>
 
-            {user && (
-              <span className="text-sm text-gray-300">
-                Hello {user.first_name} {user.last_name}
-              </span>
-            )}
-
-            {user && (
-              <div className="relative">
-                <User
-                  className="cursor-pointer"
-                  onClick={() => setShowProfile(!showProfile)}
-                />
-
-                {showProfile && (
-                  <div className="absolute right-0 mt-2 bg-white text-black p-3 rounded shadow-lg w-40">
-                    <p className="font-semibold">
-                      {user.first_name} {user.last_name}
-                    </p>
-                    <button className="text-blue-600 text-sm mt-2">
-                      Change Password
-                    </button>
-                    <button
-                      onClick={logout}
-                      className="block text-red-500 mt-2"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!user && (
-              <>
-                <button
-                  onClick={() => setShowAuth("login")}
-                  className="px-4 py-2 border rounded-lg hover:bg-white/10"
-                >
-                  Login
-                </button>
-
-                <button
-                  onClick={() => setShowAuth("register")}
-                  className="px-4 py-2 bg-emerald-600 rounded-lg hover:bg-emerald-500"
-                >
-                  Create Account
-                </button>
-              </>
-            )}
-          </div>
+              <button
+                onClick={() => setShowAuth("register")}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition shadow-md"
+              >
+                Create Account
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* HERO */}
-        <div className="flex flex-col items-center text-center mt-20 px-4">
+        <div className="flex flex-col items-center text-center mt-20">
           <h1 className="text-5xl font-bold mb-4">
             Build Your Startup with AI 🚀
           </h1>
 
-          <p className="text-gray-400 mb-10 max-w-xl">
-            Multi-agent AI system generating full business strategies instantly.
-          </p>
-
-          <div className="grid grid-cols-3 gap-6 mt-10 max-w-4xl">
+          <div className="grid grid-cols-3 gap-6 mt-10">
             {features.map((f, i) => (
-              <div key={i} className="p-6 bg-white/5 backdrop-blur-lg rounded-xl border border-white/10 hover:scale-105 transition">
-                <f.icon className="mb-3 text-emerald-400" size={28} />
-                <h3 className="font-semibold">{f.title}</h3>
-                <p className="text-sm text-gray-300">{f.desc}</p>
+              <div key={i} className="p-6 bg-white/5 rounded-xl">
+                <f.icon />
+                <h3>{f.title}</h3>
+                <p>{f.desc}</p>
               </div>
             ))}
           </div>
 
           <button
             onClick={() => setActiveTab("dashboard")}
-            className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500 transition"
+            className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500"
           >
             Start Building 🚀
           </button>
         </div>
 
-        {/* 🔐 AUTH MODAL */}
+        {/* AUTH MODAL */}
         {showAuth && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/60">
-            <div className="bg-white/10 backdrop-blur-xl p-6 rounded-xl w-[350px] border border-white/20 shadow-xl">
-
-              <h2 className="text-xl mb-4">
-                {showAuth === "login" ? "Login" : "Create Account"}
-              </h2>
+            <div className="p-6 bg-white/10 rounded-xl w-[350px]">
+              <h2 className="mb-4 capitalize">{showAuth}</h2>
 
               {showAuth === "register" && (
                 <>
@@ -278,12 +270,12 @@ function App() {
 
               <button
                 onClick={showAuth === "login" ? login : register}
-                className="w-full bg-emerald-600 p-3 rounded mt-2 hover:bg-emerald-500 transition"
+                className="w-full mt-4 py-3 bg-emerald-600 rounded-xl"
               >
                 Submit
               </button>
 
-              <button onClick={() => setShowAuth(null)} className="mt-3 text-sm text-gray-400">
+              <button onClick={() => setShowAuth(null)} className="mt-3 text-gray-400">
                 Close
               </button>
             </div>
@@ -293,11 +285,11 @@ function App() {
     );
   }
 
-  // DASHBOARD
+  // 🚀 DASHBOARD
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+    <div className="flex h-screen">
 
-      <div className="w-64 p-6 space-y-4 bg-emerald-700/90">
+      <div className="w-64 p-6 space-y-4 bg-emerald-700/90 text-white">
         <h2 className="text-2xl font-bold mb-6">Venture GenAI</h2>
         <SidebarItem icon={Home} label="Dashboard" tab="dashboard" />
         <SidebarItem icon={Globe} label="Market" tab="market" />
@@ -307,21 +299,48 @@ function App() {
         <SidebarItem icon={Building2} label="Competitor" tab="competitor" />
       </div>
 
-      <div className="flex-1 p-8">
-        <input
-          value={idea}
-          onChange={(e) => setIdea(e.target.value)}
-          placeholder="Enter startup idea..."
-          className="w-[400px] p-3 rounded-xl bg-white/10 border border-white/20"
+      <div className="flex-1 flex flex-col bg-slate-900 text-white">
+
+        <Topbar
+          activeTab={activeTab}
+          user={user}
+          showProfile={showProfile}
+          setShowProfile={setShowProfile}
+          logout={logout}
+          changePassword={changePassword}
         />
 
-        <button onClick={generate} className="ml-4 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500">
-          Generate
-        </button>
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
 
-        {loading && <p className="mt-2">🤖 Generating...</p>}
+          {user && (
+            <h1 className="text-4xl font-bold mb-6">
+              Hello {user.first_name} {user.last_name}! 🚀
+            </h1>
+          )}
 
-        <div className="mt-6">{renderContent()}</div>
+          <div className="flex gap-3 mb-4">
+            <input
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              placeholder="Write your startup idea here..."
+              className="w-[450px] p-4 rounded-xl bg-white/10 border border-white/20 backdrop-blur-lg"
+            />
+
+            <button
+              onClick={generate}
+              className="px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500"
+            >
+              Generate 🚀
+            </button>
+          </div>
+
+          {loading && <p className="text-gray-300">Generating...</p>}
+
+          <div className="mt-6 w-full max-w-4xl text-left">
+            {renderContent()}
+          </div>
+
+        </div>
       </div>
     </div>
   );

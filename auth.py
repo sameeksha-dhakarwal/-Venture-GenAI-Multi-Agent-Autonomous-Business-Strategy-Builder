@@ -7,20 +7,27 @@ router = APIRouter()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# 🔥 DB INIT
-conn = sqlite3.connect("users.db", check_same_thread=False)
-cursor = conn.cursor()
+DB_NAME = "users.db"
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    first_name TEXT,
-    last_name TEXT,
-    email TEXT UNIQUE,
-    password TEXT
-)
-""")
-conn.commit()
+# 🔥 DB INIT
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT,
+        last_name TEXT,
+        email TEXT UNIQUE,
+        password TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
 
 # 🔥 MODELS
 class RegisterUser(BaseModel):
@@ -33,16 +40,25 @@ class LoginUser(BaseModel):
     email: str
     password: str
 
-# 🔐 HASH
+class ChangePasswordModel(BaseModel):
+    email: str
+    new_password: str
+
+# 🔐 HASH (FIXED)
 def hash_password(password):
+    password = password.encode("utf-8")[:72]
     return pwd_context.hash(password)
 
 def verify_password(password, hashed):
+    password = password.encode("utf-8")[:72]
     return pwd_context.verify(password, hashed)
 
 # 🧾 REGISTER
 @router.post("/register")
 def register(user: RegisterUser):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
     try:
         hashed = hash_password(user.password)
 
@@ -54,14 +70,22 @@ def register(user: RegisterUser):
 
         return {"message": "User created successfully"}
 
-    except:
+    except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="User already exists")
+
+    finally:
+        conn.close()
 
 # 🔑 LOGIN
 @router.post("/login")
 def login(user: LoginUser):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
     cursor.execute("SELECT * FROM users WHERE email=?", (user.email,))
     result = cursor.fetchone()
+
+    conn.close()
 
     if not result:
         raise HTTPException(status_code=400, detail="User not found")
@@ -78,14 +102,20 @@ def login(user: LoginUser):
         }
     }
 
+# 🔐 CHANGE PASSWORD
 @router.post("/change-password")
-def change_password(email: str, new_password: str):
-    hashed = hash_password(new_password)
+def change_password(data: ChangePasswordModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    hashed = hash_password(data.new_password)
 
     cursor.execute(
         "UPDATE users SET password=? WHERE email=?",
-        (hashed, email)
+        (hashed, data.email)
     )
+
     conn.commit()
+    conn.close()
 
     return {"message": "Password updated"}
