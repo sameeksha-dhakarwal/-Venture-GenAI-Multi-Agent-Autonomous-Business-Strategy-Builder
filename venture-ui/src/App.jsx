@@ -8,7 +8,14 @@ import {
   Building2,
   Sparkles,
 } from "lucide-react";
+
 import Topbar from "./components/Topbar";
+import Dashboard from "./pages/Dashboard";
+import MarketView from "./pages/MarketView";
+import BusinessView from "./pages/BusinessView";
+import FinanceView from "./pages/FinanceView";
+import PitchView from "./pages/PitchView";
+import CompetitorView from "./pages/CompetitorView";
 
 function App() {
   // 🔐 AUTH STATE
@@ -34,7 +41,7 @@ function App() {
     if (successMessage) {
       const timer = setTimeout(() => {
         setSuccessMessage("");
-      }, 2000);
+      }, 1500); // faster disappear
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
@@ -164,32 +171,11 @@ function App() {
     { icon: Brain, title: "Business Model", desc: "USP & strategy" },
     { icon: BarChart3, title: "Financials", desc: "Forecasts & ROI" },
     { icon: Mic, title: "Pitch Deck", desc: "Investor-ready" },
-    { icon: Sparkles, title: "AI Agents", desc: "Multi-agent system" }
+    { icon: Sparkles, title: "AI Agents", desc: "Multi-agent system" },
   ];
 
   const inputClass =
-    "w-full p-3 mb-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400";
-
-  const renderContent = () => {
-    if (!data && activeTab !== "dashboard") {
-      return <p className="text-gray-300">Generate strategy first</p>;
-    }
-
-    switch (activeTab) {
-      case "market":
-        return <pre>{data.market}</pre>;
-      case "business":
-        return <pre>{data.business_model}</pre>;
-      case "finance":
-        return <pre>{data.financials}</pre>;
-      case "pitch":
-        return <pre>{data.pitch_deck}</pre>;
-      case "competitor":
-        return <pre>{data.competitors}</pre>;
-      default:
-        return <p>Select section</p>;
-    }
-  };
+    "w-full p-3 mb-3 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-400";
 
   // 🌐 LANDING PAGE
   if (activeTab === "landing") {
@@ -197,12 +183,11 @@ function App() {
       <div className="min-h-screen text-white bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 
         {successMessage && (
-          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-xl shadow-lg">
+          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-xl shadow-lg z-50">
             {successMessage}
           </div>
         )}
 
-        {/* ✅ FIXED HEADER */}
         <div className="flex justify-between items-center px-10 py-6">
           <h1 className="text-2xl font-bold">🚀 Venture GenAI</h1>
 
@@ -248,11 +233,14 @@ function App() {
           </button>
         </div>
 
-        {/* AUTH MODAL */}
+        {/* ✅ FIXED AUTH MODAL */}
         {showAuth && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/60">
-            <div className="p-6 bg-white/10 rounded-xl w-[350px]">
-              <h2 className="mb-4 capitalize">{showAuth}</h2>
+          <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
+            <div className="p-6 bg-[#1e293b] rounded-2xl w-[400px] shadow-2xl">
+
+              <h2 className="mb-4 text-xl font-semibold capitalize">
+                {showAuth}
+              </h2>
 
               {showAuth === "register" && (
                 <>
@@ -275,7 +263,10 @@ function App() {
                 Submit
               </button>
 
-              <button onClick={() => setShowAuth(null)} className="mt-3 text-gray-400">
+              <button
+                onClick={() => setShowAuth(null)}
+                className="mt-3 text-gray-400"
+              >
                 Close
               </button>
             </div>
@@ -312,33 +303,21 @@ function App() {
 
         <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
 
-          {user && (
-            <h1 className="text-4xl font-bold mb-6">
-              Hello {user.first_name} {user.last_name}! 🚀
-            </h1>
+          {activeTab === "dashboard" && (
+            <Dashboard
+              idea={idea}
+              setIdea={setIdea}
+              generate={generate}
+              loading={loading}
+              user={user}
+            />
           )}
 
-          <div className="flex gap-3 mb-4">
-            <input
-              value={idea}
-              onChange={(e) => setIdea(e.target.value)}
-              placeholder="Write your startup idea here..."
-              className="w-[450px] p-4 rounded-xl bg-white/10 border border-white/20 backdrop-blur-lg"
-            />
-
-            <button
-              onClick={generate}
-              className="px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500"
-            >
-              Generate 🚀
-            </button>
-          </div>
-
-          {loading && <p className="text-gray-300">Generating...</p>}
-
-          <div className="mt-6 w-full max-w-4xl text-left">
-            {renderContent()}
-          </div>
+          {activeTab === "market" && <MarketView data={data} />}
+          {activeTab === "business" && <BusinessView data={data} />}
+          {activeTab === "finance" && <FinanceView data={data} />}
+          {activeTab === "pitch" && <PitchView data={data} />}
+          {activeTab === "competitor" && <CompetitorView data={data} />}
 
         </div>
       </div>
