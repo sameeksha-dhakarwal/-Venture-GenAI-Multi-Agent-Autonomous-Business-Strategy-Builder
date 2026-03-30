@@ -10,3 +10,5 @@ python -m uvicorn api:app --reload
 Terminal 3
 cd venture-ui
 npm run dev
+
+Market view
