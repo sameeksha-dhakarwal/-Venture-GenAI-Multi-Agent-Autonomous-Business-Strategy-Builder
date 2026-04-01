@@ -34,3 +34,6 @@
 .animate-slideIn {
   animation: slideIn 0.4s ease;
 }
+body {
+  overflow-y: auto;
+}

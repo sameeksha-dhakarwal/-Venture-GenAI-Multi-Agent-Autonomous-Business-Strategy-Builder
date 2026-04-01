@@ -41,7 +41,7 @@ function App() {
     if (successMessage) {
       const timer = setTimeout(() => {
         setSuccessMessage("");
-      }, 1500); // faster disappear
+      }, 1500);
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
@@ -177,11 +177,10 @@ function App() {
   const inputClass =
     "w-full p-3 mb-3 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-400";
 
-  // 🌐 LANDING PAGE
+  // 🌐 LANDING PAGE (unchanged)
   if (activeTab === "landing") {
     return (
       <div className="min-h-screen text-white bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-
         {successMessage && (
           <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-xl shadow-lg z-50">
             {successMessage}
@@ -193,17 +192,10 @@ function App() {
 
           {!user && (
             <div className="flex items-center gap-6">
-              <button
-                onClick={() => setShowAuth("login")}
-                className="px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10 transition"
-              >
+              <button onClick={() => setShowAuth("login")} className="px-4 py-2 rounded-lg border border-white/20 hover:bg-white/10">
                 Login
               </button>
-
-              <button
-                onClick={() => setShowAuth("register")}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition shadow-md"
-              >
+              <button onClick={() => setShowAuth("register")} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500">
                 Create Account
               </button>
             </div>
@@ -211,9 +203,7 @@ function App() {
         </div>
 
         <div className="flex flex-col items-center text-center mt-20">
-          <h1 className="text-5xl font-bold mb-4">
-            Build Your Startup with AI 🚀
-          </h1>
+          <h1 className="text-5xl font-bold mb-4">Build Your Startup with AI 🚀</h1>
 
           <div className="grid grid-cols-3 gap-6 mt-10">
             {features.map((f, i) => (
@@ -225,22 +215,16 @@ function App() {
             ))}
           </div>
 
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl hover:bg-emerald-500"
-          >
+          <button onClick={() => setActiveTab("dashboard")} className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl">
             Start Building 🚀
           </button>
         </div>
 
-        {/* ✅ FIXED AUTH MODAL */}
+        {/* AUTH MODAL (unchanged) */}
         {showAuth && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
             <div className="p-6 bg-[#1e293b] rounded-2xl w-[400px] shadow-2xl">
-
-              <h2 className="mb-4 text-xl font-semibold capitalize">
-                {showAuth}
-              </h2>
+              <h2 className="mb-4 text-xl font-semibold capitalize">{showAuth}</h2>
 
               {showAuth === "register" && (
                 <>
@@ -256,17 +240,11 @@ function App() {
                 <input type="password" className={inputClass} placeholder="Confirm Password" onChange={(e)=>setConfirmPassword(e.target.value)} />
               )}
 
-              <button
-                onClick={showAuth === "login" ? login : register}
-                className="w-full mt-4 py-3 bg-emerald-600 rounded-xl"
-              >
+              <button onClick={showAuth === "login" ? login : register} className="w-full mt-4 py-3 bg-emerald-600 rounded-xl">
                 Submit
               </button>
 
-              <button
-                onClick={() => setShowAuth(null)}
-                className="mt-3 text-gray-400"
-              >
+              <button onClick={() => setShowAuth(null)} className="mt-3 text-gray-400">
                 Close
               </button>
             </div>
@@ -276,11 +254,12 @@ function App() {
     );
   }
 
-  // 🚀 DASHBOARD
+  // 🚀 DASHBOARD (FIXED)
   return (
-    <div className="flex h-screen">
+    <div className="flex min-h-screen">
 
-      <div className="w-64 p-6 space-y-4 bg-emerald-700/90 text-white">
+      {/* SIDEBAR */}
+      <div className="w-64 p-6 space-y-4 bg-emerald-700/90 text-white min-h-screen">
         <h2 className="text-2xl font-bold mb-6">Venture GenAI</h2>
         <SidebarItem icon={Home} label="Dashboard" tab="dashboard" />
         <SidebarItem icon={Globe} label="Market" tab="market" />
@@ -290,6 +269,7 @@ function App() {
         <SidebarItem icon={Building2} label="Competitor" tab="competitor" />
       </div>
 
+      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col bg-slate-900 text-white">
 
         <Topbar
@@ -301,7 +281,8 @@ function App() {
           changePassword={changePassword}
         />
 
-        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+        {/* ✅ FIXED SCROLL AREA */}
+        <div className="flex-1 overflow-y-auto p-8">
 
           {activeTab === "dashboard" && (
             <Dashboard
