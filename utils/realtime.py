@@ -1,7 +1,7 @@
 import requests
 import yfinance as yf
 
-SERP_API_KEY = "59ffe217b0c5612c3091a17251c86a1cd5aa28d127a1a46514d1a57d85f8f95d"
+SERP_API_KEY = "##"
 
 
 # 🔥 GOOGLE SEARCH (REAL COMPETITORS)
