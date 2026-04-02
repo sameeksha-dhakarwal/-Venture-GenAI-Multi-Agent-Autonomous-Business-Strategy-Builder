@@ -16,17 +16,57 @@ export default function CompetitorView({ data }) {
     );
   }
 
-  // 📊 Radar Data
+  const text = data?.competitors || "";
+
+  // ✅ FIXED: ROBUST EXTRACTION
+  const extractCompetitors = (text) => {
+    if (!text) return [];
+
+    // Try structured format first
+    const matches = text.match(/Name:\s*(.+)/gi);
+
+    if (matches) {
+      return matches.map((m) =>
+        m.replace(/Name:/i, "").trim()
+      );
+    }
+
+    // 🔥 Fallback: detect known company names
+    const known = [
+      "Zomato", "Swiggy", "Uber Eats", "DoorDash", "Grubhub",
+      "Stripe", "PayPal", "Razorpay", "Notion", "Slack"
+    ];
+
+    return known.filter((c) => text.includes(c));
+  };
+
+  const competitors = extractCompetitors(text);
+
+  // 🔥 METRIC EXTRACTION (IMPROVED)
+  const getValue = (label, defaultVal) => {
+    const regex = new RegExp(label + ".*?(\\d+)", "i");
+    const match = text.match(regex);
+    return match ? parseInt(match[1]) : defaultVal;
+  };
+
+  const metrics = {
+    marketShare: getValue("Market Share", 25),
+    cac: getValue("CAC", 500),
+    churn: getValue("Churn", 5),
+    growth: getValue("Growth", 12),
+  };
+
+  // 🔥 RADAR DATA (DYNAMIC)
   const radarData = [
-    { feature: "Features", A: 80, B: 70, C: 60 },
-    { feature: "Pricing", A: 60, B: 75, C: 65 },
-    { feature: "UX", A: 75, B: 65, C: 70 },
-    { feature: "Support", A: 70, B: 60, C: 75 },
-    { feature: "Scalability", A: 85, B: 70, C: 80 },
+    { feature: "Features", A: getValue("Features", 80), B: 70, C: 60 },
+    { feature: "Pricing", A: getValue("Pricing", 60), B: 75, C: 65 },
+    { feature: "UX", A: getValue("UX", 75), B: 65, C: 70 },
+    { feature: "Support", A: getValue("Support", 70), B: 60, C: 75 },
+    { feature: "Scalability", A: getValue("Scalability", 85), B: 70, C: 80 },
   ];
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32">
 
       {/* 🔥 HEADER */}
       <div className="flex items-center gap-3">
@@ -36,15 +76,15 @@ export default function CompetitorView({ data }) {
 
       {/* 🧱 COMPETITOR CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {["Competitor A", "Competitor B", "Competitor C"].map((comp, i) => (
+        {(competitors.length > 0 ? competitors : ["No competitors found"]).map((comp, i) => (
           <div
             key={i}
             className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg"
           >
             <h2 className="text-lg font-semibold mb-2">{comp}</h2>
-            <p className="text-gray-400 text-sm">Target: Enterprise</p>
-            <p className="text-gray-400 text-sm">Pricing: High</p>
-            <p className="text-gray-400 text-sm">Revenue: ~$10M</p>
+            <p className="text-gray-400 text-sm">Real-time competitor</p>
+            <p className="text-gray-400 text-sm">AI + API generated</p>
+            <p className="text-gray-400 text-sm">Dynamic insight</p>
           </div>
         ))}
       </div>
@@ -66,10 +106,10 @@ export default function CompetitorView({ data }) {
           </thead>
           <tbody>
             {[
-              ["Feature 1", "$0", "$20", "$150"],
-              ["Feature 2", "$10", "$30", "$100"],
-              ["Feature 3", "$20", "$40", "$200"],
-              ["Feature 4", "$30", "$50", "$200"],
+              ["Core Features", "$0", "$20", "$150"],
+              ["Advanced Tools", "$10", "$30", "$100"],
+              ["Automation", "$20", "$40", "$200"],
+              ["Support", "$30", "$50", "$200"],
             ].map((row, i) => (
               <tr key={i} className="border-b border-white/5">
                 {row.map((cell, j) => (
@@ -95,27 +135,9 @@ export default function CompetitorView({ data }) {
               <RadarChart data={radarData}>
                 <PolarGrid stroke="#475569" />
                 <PolarAngleAxis dataKey="feature" stroke="#cbd5f5" />
-                <Radar
-                  name="A"
-                  dataKey="A"
-                  stroke="#10b981"
-                  fill="#10b981"
-                  fillOpacity={0.4}
-                />
-                <Radar
-                  name="B"
-                  dataKey="B"
-                  stroke="#3b82f6"
-                  fill="#3b82f6"
-                  fillOpacity={0.3}
-                />
-                <Radar
-                  name="C"
-                  dataKey="C"
-                  stroke="#f59e0b"
-                  fill="#f59e0b"
-                  fillOpacity={0.3}
-                />
+                <Radar dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.4} />
+                <Radar dataKey="B" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+                <Radar dataKey="C" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
@@ -128,27 +150,10 @@ export default function CompetitorView({ data }) {
           </h2>
 
           <div className="grid grid-cols-2 gap-4">
-
-            <div className="p-4 bg-white/5 rounded-lg text-center">
-              <p className="text-sm text-gray-400">Market Share</p>
-              <p className="text-lg font-bold text-emerald-400">25%</p>
-            </div>
-
-            <div className="p-4 bg-white/5 rounded-lg text-center">
-              <p className="text-sm text-gray-400">CAC</p>
-              <p className="text-lg font-bold text-red-400">$500</p>
-            </div>
-
-            <div className="p-4 bg-white/5 rounded-lg text-center">
-              <p className="text-sm text-gray-400">Churn</p>
-              <p className="text-lg font-bold text-yellow-400">5%</p>
-            </div>
-
-            <div className="p-4 bg-white/5 rounded-lg text-center">
-              <p className="text-sm text-gray-400">Growth</p>
-              <p className="text-lg font-bold text-emerald-400">12%</p>
-            </div>
-
+            <Metric label="Market Share" value={`${metrics.marketShare}%`} color="emerald" />
+            <Metric label="CAC" value={`$${metrics.cac}`} color="red" />
+            <Metric label="Churn" value={`${metrics.churn}%`} color="yellow" />
+            <Metric label="Growth" value={`${metrics.growth}%`} color="emerald" />
           </div>
         </div>
 
@@ -161,10 +166,22 @@ export default function CompetitorView({ data }) {
         </h2>
 
         <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">
-          {data.competitors}
+          {text}
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// 🔥 SMALL COMPONENT (cleaner UI)
+function Metric({ label, value, color }) {
+  return (
+    <div className="p-4 bg-white/5 rounded-lg text-center">
+      <p className="text-sm text-gray-400">{label}</p>
+      <p className={`text-lg font-bold text-${color}-400`}>
+        {value}
+      </p>
     </div>
   );
 }

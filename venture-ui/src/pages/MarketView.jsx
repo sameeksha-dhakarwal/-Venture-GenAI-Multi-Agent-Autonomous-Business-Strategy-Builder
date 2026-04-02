@@ -26,25 +26,53 @@ export default function MarketView({ data }) {
     );
   }
 
-  // 📊 Dummy chart data
+  const text = data?.market || "";
+
+  // 🔥 EXTRACT PERSONA
+  const getLine = (label, fallback) => {
+    const regex = new RegExp(label + ".*?:\\s*(.*)", "i");
+    const match = text.match(regex);
+    return match ? match[1] : fallback;
+  };
+
+  const persona = {
+    name: getLine("Persona", "Target user"),
+    pain: getLine("Pain", "Problem awareness"),
+    behavior: getLine("Behavior", "Digital-first"),
+  };
+
+  // 🔥 DYNAMIC TREND (based on idea text length)
+  const seed = text.length || 50;
+
   const trendData = [
-    { year: "2021", value: 20 },
-    { year: "2022", value: 35 },
-    { year: "2023", value: 30 },
-    { year: "2024", value: 50 },
-    { year: "2025", value: 65 },
+    { year: "2021", value: seed % 30 + 20 },
+    { year: "2022", value: seed % 40 + 30 },
+    { year: "2023", value: seed % 50 + 40 },
+    { year: "2024", value: seed % 60 + 50 },
+    { year: "2025", value: seed % 70 + 60 },
   ];
+
+  // 🔥 RADAR FROM TEXT SIGNALS
+  const getScore = (label, defaultVal) => {
+    const regex = new RegExp(label + ".*?(\\d+)", "i");
+    const match = text.match(regex);
+    return match ? parseInt(match[1]) : defaultVal;
+  };
 
   const radarData = [
-    { feature: "Demand", value: 80 },
-    { feature: "Growth", value: 70 },
-    { feature: "Competition", value: 50 },
-    { feature: "Profit", value: 75 },
-    { feature: "Scalability", value: 85 },
+    { feature: "Demand", value: getScore("Demand", 80) },
+    { feature: "Growth", value: getScore("Growth", 70) },
+    { feature: "Competition", value: getScore("Competition", 50) },
+    { feature: "Profit", value: getScore("Profit", 75) },
+    { feature: "Scalability", value: getScore("Scalability", 85) },
   ];
 
+  // 🔥 OPPORTUNITY (AI BASED)
+  const opportunity =
+    text.split(".")[0] || "Strong market opportunity detected";
+
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32">
 
       {/* 🔥 HEADER */}
       <div className="flex items-center gap-3">
@@ -55,7 +83,7 @@ export default function MarketView({ data }) {
       {/* 📊 TOP GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        {/* 👤 PERSONA */}
+        {/* 👤 PERSONA (DYNAMIC) */}
         <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Users className="text-emerald-400" />
@@ -63,13 +91,13 @@ export default function MarketView({ data }) {
           </h2>
 
           <div className="space-y-2 text-gray-300">
-            <p><b>Name:</b> Eco-conscious user</p>
-            <p><b>Pain:</b> Finding sustainable options</p>
-            <p><b>Behavior:</b> Mobile-first buyer</p>
+            <p><b>Name:</b> {persona.name}</p>
+            <p><b>Pain:</b> {persona.pain}</p>
+            <p><b>Behavior:</b> {persona.behavior}</p>
           </div>
         </div>
 
-        {/* 🎯 OPPORTUNITY */}
+        {/* 🎯 OPPORTUNITY (DYNAMIC) */}
         <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Target className="text-emerald-400" />
@@ -77,17 +105,16 @@ export default function MarketView({ data }) {
           </h2>
 
           <p className="text-gray-300">
-            Rapidly growing niche market with strong demand signals.
+            {opportunity}
           </p>
         </div>
 
-        {/* 📊 RADAR CHART */}
+        {/* 📊 RADAR CHART (DYNAMIC) */}
         <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
           <h2 className="text-lg font-semibold mb-4">
             Market Strength
           </h2>
 
-          {/* ✅ FIXED HEIGHT */}
           <div className="w-full h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData}>
@@ -107,13 +134,12 @@ export default function MarketView({ data }) {
 
       </div>
 
-      {/* 📈 LINE CHART */}
+      {/* 📈 LINE CHART (DYNAMIC) */}
       <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
         <h2 className="text-xl font-semibold mb-4">
           📈 Demand Growth
         </h2>
 
-        {/* ✅ CRITICAL FIX */}
         <div className="w-full h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData}>

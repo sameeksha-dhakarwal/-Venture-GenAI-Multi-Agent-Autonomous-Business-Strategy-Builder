@@ -1,15 +1,23 @@
 from utils.llm import get_llm
 from rag.retriever import retrieve
+from utils.realtime import get_competitors  # 🔥 NEW
 
 llm = get_llm()
 
 def market_agent(state):
     idea = state["idea"].lower()
 
+    # 🔍 RAG CONTEXT (KEPT)
     docs = retrieve(idea)
-    context = "\n".join([d.page_content for d in docs])
+    context = "\n".join([d.page_content for d in docs]) if docs else ""
 
-    # 🔥 YOUR EXISTING LOGIC (kept as fallback)
+    # 🌐 REAL COMPETITORS (NEW 🔥)
+    real_comps = get_competitors(idea)
+    comp_names = [c["name"] for c in real_comps if c.get("name")]
+
+    real_context = ", ".join(comp_names) if comp_names else "No real data found"
+
+    # 🔥 YOUR EXISTING LOGIC (KEPT AS FALLBACK)
     keywords = idea.split()
 
     if "ai" in idea:
@@ -25,46 +33,71 @@ def market_agent(state):
     segments = f"Users related to {idea}, businesses, and tech-savvy consumers"
     personas = f"Early adopters interested in {idea}, young professionals, digital users"
 
-    # 🔥 LLM PROMPT (REAL-WORLD DATA GENERATION)
+    # 🔥 IMPROVED LLM PROMPT (REAL + STRUCTURED)
     prompt = f"""
 You are a market research analyst.
 
 Startup Idea:
 {idea}
 
-Context (real startup data):
+Real companies in this space:
+{real_context}
+
+Additional context:
 {context}
 
-Generate realistic and data-driven market analysis.
+INSTRUCTIONS:
+- Use real-world knowledge
+- Base analysis on these companies
+- Avoid generic statements
+- Use realistic estimates
 
 STRICT FORMAT:
 
 Market Size (TAM/SAM/SOM):
-Market Growth Rate:
-Customer Segments:
-Customer Personas:
-Demand Trends:
-Problem–Solution Fit:
-Buying Behavior:
-Market Trends:
-Entry Barriers:
-Market Risks:
+- TAM:
+- SAM:
+- SOM:
 
-Keep answers concise and professional.
+Market Growth Rate:
+
+Customer Segments:
+- 
+
+Customer Personas:
+- 
+
+Demand Trends:
+- 
+- 
+- 
+
+Problem–Solution Fit:
+
+Buying Behavior:
+
+Market Trends:
+- 
+- 
+- 
+
+Entry Barriers:
+
+Market Risks:
 """
 
     try:
-        response = llm.invoke(prompt[:1500])
+        response = llm.invoke(prompt[:2000])
 
-        # 🔥 BASIC VALIDATION
-        if len(response) > 100:
-            state["market"] = response
+        # 🔥 IMPROVED VALIDATION
+        if response and len(response.strip()) > 150 and "Market Size" in response:
+            state["market"] = response.strip()
             return state
 
     except Exception as e:
-        print("LLM failed, using fallback...")
+        print("LLM failed, using fallback...", e)
 
-    # 🔥 FALLBACK (YOUR LOGIC)
+    # 🔥 FALLBACK (YOUR ORIGINAL LOGIC — KEPT)
     trends = [
         f"Increasing adoption of {keywords[0] if keywords else 'technology'}",
         "Shift towards digital platforms",

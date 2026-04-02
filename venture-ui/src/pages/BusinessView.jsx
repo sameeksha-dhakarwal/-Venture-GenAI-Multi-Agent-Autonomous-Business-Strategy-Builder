@@ -10,14 +10,55 @@ function BusinessView({ data }) {
     );
   }
 
-  // 🔥 Extract bullet points from AI text
-  const points =
-    data.business_model
-      ?.split(".")
-      .filter((p) => p.trim().length > 20) || [];
+  const text = data?.business_model || "";
+
+  // 🔥 SMART SECTION EXTRACTOR
+  const extractSection = (label, fallback) => {
+    const regex = new RegExp(label + ":(.*?)(\\n\\n|$)", "is");
+    const match = text.match(regex);
+    return match ? match[1].trim() : fallback;
+  };
+
+  // 🔥 EXTRACT DATA PROPERLY
+  const problem = extractSection(
+    "Problem Statement",
+    "Users face inefficiencies in current systems."
+  );
+
+  const solution = extractSection(
+    "Solution Overview",
+    "AI-powered platform solving core problems."
+  );
+
+  const usp = extractSection(
+    "Unique Selling Proposition",
+    "Differentiated AI-driven approach with scalability."
+  );
+
+  const resources = extractSection(
+    "Key Resources",
+    "Technology, team, and infrastructure."
+  ).split("\n");
+
+  // 🔥 SWOT EXTRACTION
+  const extractList = (label, fallback) => {
+    const regex = new RegExp(label + ":(.*?)(\\n[A-Z]|$)", "is");
+    const match = text.match(regex);
+    if (!match) return fallback;
+
+    return match[1]
+      .split("\n")
+      .map((l) => l.replace("-", "").trim())
+      .filter((l) => l.length > 5);
+  };
+
+  const strengths = extractList("Strengths", ["Strong innovation"]);
+  const weaknesses = extractList("Weaknesses", ["Early-stage risks"]);
+  const opportunities = extractList("Opportunities", ["Growing demand"]);
+  const threats = extractList("Threats", ["Market competition"]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-20">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32">
 
       {/* 🔥 HEADER */}
       <div className="flex items-center gap-3">
@@ -28,72 +69,60 @@ function BusinessView({ data }) {
       {/* 🧠 PROBLEM + SOLUTION */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* 🚨 Problem */}
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
-          <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
-            🚨 Problem
-          </h2>
-
-          <p className="text-gray-300">
-            {points[0] || "Users face inefficiencies in current systems."}
-          </p>
+        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
+          <h2 className="text-xl font-semibold mb-3">🚨 Problem</h2>
+          <p className="text-gray-300">{problem}</p>
         </div>
 
-        {/* 💡 Solution */}
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
+        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
           <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
             <Lightbulb className="text-emerald-400" />
             Solution
           </h2>
-
-          <p className="text-gray-300">
-            {points[1] || "AI-powered platform solving core problems."}
-          </p>
+          <p className="text-gray-300">{solution}</p>
         </div>
 
       </div>
 
       {/* 📊 SWOT ANALYSIS */}
-      <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
-        <h2 className="text-xl font-semibold mb-4">
-          📊 SWOT Analysis
-        </h2>
+      <div className="p-6 rounded-xl bg-white/5 border border-white/10">
+        <h2 className="text-xl font-semibold mb-4">📊 SWOT Analysis</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          {/* Strength */}
           <div className="p-4 bg-white/5 rounded-lg">
             <h3 className="font-semibold text-emerald-400 mb-2">Strengths</h3>
             <ul className="text-gray-300 space-y-1">
-              <li>• {points[2] || "Strong innovation"}</li>
-              <li>• {points[3] || "Scalable solution"}</li>
+              {strengths.slice(0, 3).map((s, i) => (
+                <li key={i}>• {s}</li>
+              ))}
             </ul>
           </div>
 
-          {/* Weakness */}
           <div className="p-4 bg-white/5 rounded-lg">
             <h3 className="font-semibold text-red-400 mb-2">Weaknesses</h3>
             <ul className="text-gray-300 space-y-1">
-              <li>• {points[4] || "Early-stage risk"}</li>
-              <li>• {points[5] || "Limited resources"}</li>
+              {weaknesses.slice(0, 3).map((s, i) => (
+                <li key={i}>• {s}</li>
+              ))}
             </ul>
           </div>
 
-          {/* Opportunity */}
           <div className="p-4 bg-white/5 rounded-lg">
             <h3 className="font-semibold text-blue-400 mb-2">Opportunities</h3>
             <ul className="text-gray-300 space-y-1">
-              <li>• {points[6] || "Growing market demand"}</li>
-              <li>• {points[7] || "Expansion potential"}</li>
+              {opportunities.slice(0, 3).map((s, i) => (
+                <li key={i}>• {s}</li>
+              ))}
             </ul>
           </div>
 
-          {/* Threat */}
           <div className="p-4 bg-white/5 rounded-lg">
             <h3 className="font-semibold text-yellow-400 mb-2">Threats</h3>
             <ul className="text-gray-300 space-y-1">
-              <li>• {points[8] || "Competition"}</li>
-              <li>• {points[9] || "Market volatility"}</li>
+              {threats.slice(0, 3).map((s, i) => (
+                <li key={i}>• {s}</li>
+              ))}
             </ul>
           </div>
 
@@ -103,35 +132,30 @@ function BusinessView({ data }) {
       {/* 🎯 USP + RESOURCES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* 🎯 USP */}
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
+        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <Target className="text-emerald-400" />
             Unique Selling Proposition
           </h2>
-
-          <p className="text-gray-300">
-            {points[10] || "Differentiated AI-driven approach with scalability."}
-          </p>
+          <p className="text-gray-300">{usp}</p>
         </div>
 
-        {/* 🧩 Resources */}
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
+        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
           <h2 className="text-xl font-semibold mb-4">
             🧩 Key Resources
           </h2>
 
           <ul className="text-gray-300 space-y-2">
-            <li>• {points[11] || "Technology infrastructure"}</li>
-            <li>• {points[12] || "Skilled team"}</li>
-            <li>• {points[13] || "Funding & partnerships"}</li>
+            {resources.slice(0, 4).map((r, i) => (
+              <li key={i}>• {r}</li>
+            ))}
           </ul>
         </div>
 
       </div>
 
-      {/* 📄 RAW AI OUTPUT (KEEP YOUR ORIGINAL) */}
-      <div className="p-6 rounded-xl bg-white/5 border border-white/10 backdrop-blur-lg">
+      {/* 📄 RAW AI OUTPUT */}
+      <div className="p-6 rounded-xl bg-white/5 border border-white/10">
         <h2 className="text-xl font-semibold mb-4">
           📄 Business Model Details
         </h2>
