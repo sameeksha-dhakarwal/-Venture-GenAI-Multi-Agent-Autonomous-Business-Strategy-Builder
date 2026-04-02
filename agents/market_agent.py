@@ -1,6 +1,6 @@
 from utils.llm import get_llm
 from rag.retriever import retrieve
-from utils.realtime import get_competitors  # 🔥 NEW
+from utils.realtime import get_competitors, get_market_data, get_trends  # 🔥 NEW
 
 llm = get_llm()
 
@@ -11,48 +11,64 @@ def market_agent(state):
     docs = retrieve(idea)
     context = "\n".join([d.page_content for d in docs]) if docs else ""
 
-    # 🌐 REAL COMPETITORS (NEW 🔥)
+    # 🌐 REAL COMPETITORS
     real_comps = get_competitors(idea)
     comp_names = [c["name"] for c in real_comps if c.get("name")]
-
     real_context = ", ".join(comp_names) if comp_names else "No real data found"
+
+    # 🔥 NEW — REAL MARKET DATA
+    market_data = get_market_data(idea)
+
+    # 🔥 NEW — REAL TRENDS
+    trend_data = get_trends(idea)
 
     # 🔥 YOUR EXISTING LOGIC (KEPT AS FALLBACK)
     keywords = idea.split()
 
     if "ai" in idea:
-        market_size = "TAM: Expanding global AI market, SAM: AI applications in target domain, SOM: Early adopters segment"
+        market_size = "AI market expanding rapidly"
         growth = "High growth (>20% CAGR)"
     elif "fintech" in idea or "finance" in idea:
-        market_size = "TAM: Global financial services, SAM: digital payments/fintech users, SOM: niche user base"
+        market_size = "Global fintech market expanding"
         growth = "High growth due to digital adoption"
     else:
-        market_size = "TAM: Broad industry market, SAM: target niche segment, SOM: initial penetration market"
+        market_size = "Broad industry market"
         growth = "Moderate to high growth"
 
-    segments = f"Users related to {idea}, businesses, and tech-savvy consumers"
-    personas = f"Early adopters interested in {idea}, young professionals, digital users"
+    segments = f"Users related to {idea}"
+    personas = f"Digital-first users interested in {idea}"
 
-    # 🔥 IMPROVED LLM PROMPT (REAL + STRUCTURED)
+    # 🔥 🔥 REAL DATA DRIVEN PROMPT (MAIN FIX)
     prompt = f"""
-You are a market research analyst.
+You are a professional market analyst.
 
 Startup Idea:
 {idea}
 
-Real companies in this space:
+REAL MARKET DATA (from live sources):
+{market_data}
+
+REAL INDUSTRY TRENDS:
+{trend_data}
+
+REAL COMPETITORS:
 {real_context}
 
 Additional context:
 {context}
 
-INSTRUCTIONS:
-- Use real-world knowledge
-- Base analysis on these companies
-- Avoid generic statements
-- Use realistic estimates
+CRITICAL INSTRUCTIONS:
+- DO NOT invent data
+- Use ONLY the real data provided above
+- Extract actual numbers (market size, CAGR)
+- Mention competitors where relevant
+- Explain insights like a consultant
+- Avoid generic phrases completely
 
-STRICT FORMAT:
+IMPORTANT:
+Your job is to ANALYZE the data, not generate random content.
+
+FORMAT:
 
 Market Size (TAM/SAM/SOM):
 - TAM:
@@ -62,24 +78,16 @@ Market Size (TAM/SAM/SOM):
 Market Growth Rate:
 
 Customer Segments:
-- 
 
 Customer Personas:
-- 
 
 Demand Trends:
-- 
-- 
-- 
 
 Problem–Solution Fit:
 
 Buying Behavior:
 
 Market Trends:
-- 
-- 
-- 
 
 Entry Barriers:
 
@@ -87,44 +95,21 @@ Market Risks:
 """
 
     try:
-        response = llm.invoke(prompt[:2000])
+        response = llm.invoke(prompt[:3000])
 
-        # 🔥 IMPROVED VALIDATION
-        if response and len(response.strip()) > 150 and "Market Size" in response:
+        if response and len(response.strip()) > 150:
             state["market"] = response.strip()
             return state
 
     except Exception as e:
         print("LLM failed, using fallback...", e)
 
-    # 🔥 FALLBACK (YOUR ORIGINAL LOGIC — KEPT)
+    # 🔥 FALLBACK (UNCHANGED)
     trends = [
         f"Increasing adoption of {keywords[0] if keywords else 'technology'}",
         "Shift towards digital platforms",
         "Rising investment in innovative startups"
     ]
-
-    problem_solution = f"""
-The idea addresses inefficiencies related to {idea}, improving accessibility and user experience.
-""".strip()
-
-    buying_behavior = f"""
-Customers prefer convenient and digital-first solutions related to {idea}.
-""".strip()
-
-    market_trends = [
-        "Digital transformation",
-        "AI integration",
-        f"Growth in {idea} sector"
-    ]
-
-    entry_barriers = f"""
-High competition and need for technological expertise in {idea}.
-""".strip()
-
-    risks = f"""
-Competition, scalability challenges, and market uncertainty.
-""".strip()
 
     result = f"""
 Market Size (TAM/SAM/SOM):
@@ -145,21 +130,20 @@ Demand Trends:
 - {trends[2]}
 
 Problem–Solution Fit:
-{problem_solution}
+The idea improves efficiency.
 
 Buying Behavior:
-{buying_behavior}
+Users prefer digital solutions.
 
 Market Trends:
-- {market_trends[0]}
-- {market_trends[1]}
-- {market_trends[2]}
+- Digital transformation
+- AI integration
 
 Entry Barriers:
-{entry_barriers}
+High competition
 
 Market Risks:
-{risks}
+Market uncertainty
 """
 
     state["market"] = result.strip()

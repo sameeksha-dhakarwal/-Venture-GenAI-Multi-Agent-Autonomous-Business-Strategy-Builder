@@ -51,6 +51,8 @@ function App() {
     if (!idea.trim()) return alert("Enter an idea");
 
     setLoading(true);
+    setData(null); // 🔥 NEW: clear old data for real-time feel
+
     try {
       const res = await fetch("http://127.0.0.1:8000/generate", {
         method: "POST",
@@ -157,8 +159,12 @@ function App() {
   const SidebarItem = ({ icon: Icon, label, tab }) => (
     <div
       onClick={() => setActiveTab(tab)}
-      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition 
-      ${activeTab === tab ? "bg-white/20" : "hover:bg-white/10"}`}
+      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all duration-300 
+      ${
+        activeTab === tab
+          ? "bg-white/20 scale-105"
+          : "hover:bg-white/10 hover:scale-105"
+      }`}
     >
       <Icon size={18} />
       <span>{label}</span>
@@ -177,12 +183,13 @@ function App() {
   const inputClass =
     "w-full p-3 mb-3 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-400";
 
-  // 🌐 LANDING PAGE (unchanged)
+  // 🌐 LANDING PAGE
   if (activeTab === "landing") {
     return (
-      <div className="min-h-screen text-white bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="min-h-screen text-white bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#064e3b]">
+
         {successMessage && (
-          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-xl shadow-lg z-50">
+          <div className="fixed top-5 right-5 bg-emerald-500 px-6 py-3 rounded-xl shadow-lg z-50 animate-pulse">
             {successMessage}
           </div>
         )}
@@ -207,7 +214,7 @@ function App() {
 
           <div className="grid grid-cols-3 gap-6 mt-10">
             {features.map((f, i) => (
-              <div key={i} className="p-6 bg-white/5 rounded-xl">
+              <div key={i} className="p-6 glass-card">
                 <f.icon />
                 <h3>{f.title}</h3>
                 <p>{f.desc}</p>
@@ -215,12 +222,15 @@ function App() {
             ))}
           </div>
 
-          <button onClick={() => setActiveTab("dashboard")} className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className="mt-10 px-6 py-3 bg-emerald-600 rounded-xl hover:scale-105 transition"
+          >
             Start Building 🚀
           </button>
         </div>
 
-        {/* AUTH MODAL (unchanged) */}
+        {/* AUTH MODAL (unchanged structure) */}
         {showAuth && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
             <div className="p-6 bg-[#1e293b] rounded-2xl w-[400px] shadow-2xl">
@@ -254,12 +264,12 @@ function App() {
     );
   }
 
-  // 🚀 DASHBOARD (FIXED)
+  // 🚀 MAIN APP
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#064e3b] text-white">
 
       {/* SIDEBAR */}
-      <div className="w-64 p-6 space-y-4 bg-emerald-700/90 text-white min-h-screen">
+      <div className="w-64 p-6 space-y-4 glass-card min-h-screen">
         <h2 className="text-2xl font-bold mb-6">Venture GenAI</h2>
         <SidebarItem icon={Home} label="Dashboard" tab="dashboard" />
         <SidebarItem icon={Globe} label="Market" tab="market" />
@@ -270,7 +280,7 @@ function App() {
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col bg-slate-900 text-white">
+      <div className="flex-1 flex flex-col">
 
         <Topbar
           activeTab={activeTab}
@@ -281,10 +291,18 @@ function App() {
           changePassword={changePassword}
         />
 
-        {/* ✅ FIXED SCROLL AREA */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
 
-          {activeTab === "dashboard" && (
+          {loading && (
+            <div className="flex flex-col items-center gap-4 mt-20">
+              <div className="w-12 h-12 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-emerald-400">
+                🤖 AI Agents analyzing your startup...
+              </p>
+            </div>
+          )}
+
+          {!loading && activeTab === "dashboard" && (
             <Dashboard
               idea={idea}
               setIdea={setIdea}
@@ -294,11 +312,11 @@ function App() {
             />
           )}
 
-          {activeTab === "market" && <MarketView data={data} />}
-          {activeTab === "business" && <BusinessView data={data} />}
-          {activeTab === "finance" && <FinanceView data={data} />}
-          {activeTab === "pitch" && <PitchView data={data} />}
-          {activeTab === "competitor" && <CompetitorView data={data} />}
+          {!loading && activeTab === "market" && <MarketView data={data} />}
+          {!loading && activeTab === "business" && <BusinessView data={data} />}
+          {!loading && activeTab === "finance" && <FinanceView data={data} />}
+          {!loading && activeTab === "pitch" && <PitchView data={data} />}
+          {!loading && activeTab === "competitor" && <CompetitorView data={data} />}
 
         </div>
       </div>

@@ -22,50 +22,68 @@ function Topbar({ activeTab, user, setShowProfile, showProfile, logout, changePa
   };
 
   return (
-    <div className="w-full flex justify-between items-center px-8 py-4 bg-white/5 backdrop-blur-lg border-b border-white/10">
+    <div className="w-full flex justify-between items-center px-8 py-4 
+    bg-white/5 backdrop-blur-xl border-b border-white/10 shadow-sm">
 
       {/* 🔥 LEFT TITLE */}
-      <h1 className="text-2xl font-semibold text-white">
-        {getTitle()}
-      </h1>
+      <div className="flex flex-col">
+        <h1 className="text-2xl font-semibold text-white tracking-wide">
+          {getTitle()}
+        </h1>
+
+        {/* 🔴 LIVE INDICATOR */}
+        <span className="text-xs text-emerald-400 mt-1 animate-pulse">
+          ● Live AI Analysis
+        </span>
+      </div>
 
       {/* 👤 RIGHT PROFILE */}
       {user && (
         <div className="relative flex items-center gap-4">
 
+          {/* USER NAME */}
           <span className="text-sm text-gray-300 hidden md:block">
             {user.first_name} {user.last_name}
           </span>
 
-          <User
-            className="cursor-pointer"
+          {/* AVATAR */}
+          <div
             onClick={() => setShowProfile(!showProfile)}
-          />
+            className="p-2 rounded-full bg-white/10 hover:bg-white/20 cursor-pointer transition"
+          >
+            <User size={18} />
+          </div>
 
+          {/* DROPDOWN */}
           {showProfile && (
-            <div className="absolute right-0 top-12 bg-white text-black p-3 rounded shadow-lg w-52 z-50">
-              
-              <p className="font-semibold">
+            <div className="absolute right-0 top-14 w-56 z-50 
+            glass-card p-4 animate-fade-in">
+
+              <p className="font-semibold text-white">
                 {user.first_name} {user.last_name}
               </p>
-              <p className="text-xs text-gray-500">{user.email}</p>
+              <p className="text-xs text-gray-400">{user.email}</p>
 
-              <button
-                onClick={() => {
-                  const newPass = prompt("Enter new password");
-                  if (newPass) changePassword(newPass);
-                }}
-                className="block w-full text-left text-blue-600 mt-3 text-sm"
-              >
-                Change Password
-              </button>
+              <div className="mt-4 border-t border-white/10 pt-3 space-y-2">
 
-              <button
-                onClick={logout}
-                className="block w-full text-left text-red-500 mt-2 text-sm"
-              >
-                Logout
-              </button>
+                <button
+                  onClick={() => {
+                    const newPass = prompt("Enter new password");
+                    if (newPass) changePassword(newPass);
+                  }}
+                  className="w-full text-left text-blue-400 hover:text-blue-300 text-sm transition"
+                >
+                  Change Password
+                </button>
+
+                <button
+                  onClick={logout}
+                  className="w-full text-left text-red-400 hover:text-red-300 text-sm transition"
+                >
+                  Logout
+                </button>
+
+              </div>
             </div>
           )}
         </div>

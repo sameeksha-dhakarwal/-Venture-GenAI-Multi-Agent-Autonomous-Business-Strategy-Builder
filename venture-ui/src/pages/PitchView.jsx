@@ -1,8 +1,5 @@
 import {
   Mic,
-  Target,
-  TrendingUp,
-  DollarSign,
   Download,
   FileText,
 } from "lucide-react";
@@ -22,30 +19,17 @@ export default function PitchView({ data }) {
 
   const text = data?.pitch_deck || "";
 
-  // 🔥 SMART EXTRACTOR
   const extract = (label, fallback) => {
-    const regex = new RegExp(label + ":(.*?)(\\n\\n|$)", "is");
-    const match = text.match(regex);
+    const match = text.match(new RegExp(label + ":(.*?)(\\n[A-Z]|$)", "is"));
     return match ? match[1].trim() : fallback;
   };
 
-  const problem = extract("Problem", "Problem not defined");
-  const solution = extract("Solution", "Solution not defined");
-  const market = extract("Market", "Market opportunity");
+  const problem = extract("Problem Statement", "Problem not defined");
+  const solution = extract("Solution Pitch", "Solution not defined");
+  const market = extract("Market Opportunity", "Market opportunity");
   const traction = extract("Traction", "Early traction stage");
   const model = extract("Business Model", "Revenue strategy");
-  const ask = extract("Ask", "$100,000");
-
-  // 🔥 DYNAMIC REVENUE (based on idea)
-  const seed = text.length || 50;
-
-  const revenueData = [
-    { name: "2021", value: seed * 5 },
-    { name: "2022", value: seed * 10 },
-    { name: "2023", value: seed * 20 },
-    { name: "2024", value: seed * 35 },
-    { name: "2025", value: seed * 60 },
-  ];
+  const ask = extract("Funding Ask", "$100,000");
 
   // ================= PDF =================
   const downloadPDF = async () => {
@@ -86,83 +70,18 @@ export default function PitchView({ data }) {
       });
     };
 
-    // TITLE
-    let slide = pptx.addSlide();
-    slide.background = { fill: "0f172a" };
-
-    slide.addText("🚀 Venture GenAI", {
-      x: 1,
-      y: 1.5,
-      fontSize: 36,
-      bold: true,
-      color: "10b981",
-    });
-
-    slide.addText("AI Startup Strategy Builder", {
-      x: 1,
-      y: 2.5,
-      fontSize: 20,
-      color: "ffffff",
-    });
-
     createSlide("🚨 Problem", problem);
     createSlide("💡 Solution", solution);
     createSlide("🌍 Market", market);
-
-    // 📈 CHART
-    slide = pptx.addSlide();
-    slide.background = { fill: "0f172a" };
-
-    slide.addText("📈 Revenue Growth", {
-      x: 0.5,
-      y: 0.5,
-      fontSize: 28,
-      bold: true,
-      color: "10b981",
-    });
-
-    slide.addChart(
-      pptx.ChartType.line,
-      [
-        {
-          name: "Revenue",
-          labels: revenueData.map((d) => d.name),
-          values: revenueData.map((d) => d.value),
-        },
-      ],
-      { x: 1, y: 1.5, w: 8, h: 4 }
-    );
-
     createSlide("📈 Traction", traction);
     createSlide("💰 Business Model", model);
-
-    // 🎯 ASK
-    slide = pptx.addSlide();
-    slide.background = { fill: "0f172a" };
-
-    slide.addText("🎯 Funding Ask", {
-      x: 1,
-      y: 1,
-      fontSize: 32,
-      bold: true,
-      color: "10b981",
-    });
-
-    slide.addText(ask, {
-      x: 1,
-      y: 2,
-      fontSize: 40,
-      bold: true,
-      color: "22c55e",
-    });
-
-    createSlide("📄 Full Pitch", text);
+    createSlide("🎯 Funding Ask", ask);
 
     pptx.writeFile({ fileName: "Startup_Pitch.pptx" });
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 animate-fade-in">
 
       {/* HEADER */}
       <div className="flex items-center justify-between">
@@ -172,67 +91,75 @@ export default function PitchView({ data }) {
         </div>
 
         <div className="flex gap-3">
-          <button onClick={downloadPDF} className="px-4 py-2 bg-gray-700 rounded-lg">
+          <button
+            onClick={downloadPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition"
+          >
             <FileText size={16} /> PDF
           </button>
-          <button onClick={downloadPPT} className="px-4 py-2 bg-emerald-600 rounded-lg">
+
+          <button
+            onClick={downloadPPT}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl transition hover:scale-105"
+          >
             <Download size={16} /> PPT
           </button>
         </div>
       </div>
 
+      <p className="text-sm text-emerald-400">
+        ● Live Pitch Generation Engine
+      </p>
+
       {/* CONTENT */}
       <div id="pitch-content" className="space-y-6">
 
-        {/* STORY */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[problem, solution, market].map((content, i) => (
-            <div key={i} className="p-6 bg-white/5 border border-white/10 rounded-xl">
-              <h2 className="text-xl font-semibold mb-3">
-                {i === 0 ? "🚨 Problem" : i === 1 ? "💡 Solution" : "🌍 Market"}
-              </h2>
-              <p className="text-gray-300">{content}</p>
-            </div>
-          ))}
-        </div>
+        <Grid items={[problem, solution, market]} />
 
-        {/* TRACTION + MODEL */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-6 bg-white/5 border border-white/10 rounded-xl">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <TrendingUp className="text-emerald-400" />
-              Traction
-            </h2>
-            <p className="text-gray-300">{traction}</p>
-          </div>
-
-          <div className="p-6 bg-white/5 border border-white/10 rounded-xl">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <DollarSign className="text-emerald-400" />
-              Business Model
-            </h2>
-            <p className="text-gray-300">{model}</p>
-          </div>
+          <Card title="📈 Traction" content={traction} />
+          <Card title="💰 Business Model" content={model} />
         </div>
 
-        {/* ASK */}
-        <div className="p-6 bg-white/5 border border-white/10 text-center rounded-xl">
-          <h2 className="text-xl font-semibold mb-4 flex justify-center gap-2">
-            <Target className="text-emerald-400" />
-            The Ask
-          </h2>
-          <p className="text-4xl font-bold text-emerald-400">{ask}</p>
+        {/* 🎯 FUNDING ASK (HIGHLIGHT) */}
+        <div className="glass-card p-8 text-center">
+          <h2 className="text-xl font-semibold mb-4">🎯 Funding Ask</h2>
+          <p className="text-5xl font-bold text-emerald-400">{ask}</p>
+          <p className="text-gray-400 mt-2">
+            Capital required to scale operations and growth
+          </p>
         </div>
 
-        {/* FULL */}
-        <div className="p-6 bg-white/5 border border-white/10 rounded-xl">
-          <h2 className="text-xl font-semibold mb-4">Full Pitch</h2>
-          <div className="text-gray-300 whitespace-pre-wrap">
-            {text}
-          </div>
-        </div>
+        {/* FULL PITCH */}
+        <Card title="📄 Full Pitch Narrative" content={text} />
 
       </div>
+    </div>
+  );
+}
+
+// 🔥 COMPONENTS
+
+function Card({ title, content }) {
+  return (
+    <div className="glass-card p-6">
+      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+      <p className="text-gray-300 whitespace-pre-wrap">{content}</p>
+    </div>
+  );
+}
+
+function Grid({ items }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {items.map((c, i) => (
+        <div key={i} className="glass-card p-6">
+          <h2 className="text-xl font-semibold mb-3">
+            {i === 0 ? "🚨 Problem" : i === 1 ? "💡 Solution" : "🌍 Market"}
+          </h2>
+          <p className="text-gray-300">{c}</p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,54 +1,91 @@
 from utils.llm import get_llm
-from utils.realtime import get_competitors, get_stock_data  # 🔥 NEW
+from utils.realtime import get_competitors, get_stock_data
 
 llm = get_llm()
 
 def finance_agent(state):
-    idea = state["idea"]
+    idea = state["idea"].lower()
 
-    # 🌐 REAL COMPETITORS (for context)
+    # 🌐 REAL COMPETITORS
     comps = get_competitors(idea)
     comp_names = [c["name"] for c in comps if c.get("name")]
 
-    # 📈 REAL FINANCIAL SIGNAL (benchmark)
-    stock_data = get_stock_data("AAPL")  # proxy benchmark
+    # 🔥 INDUSTRY → STOCK MAPPING (NEW)
+    industry_map = {
+        "food": "ZOMATO.NS",
+        "delivery": "UBER",
+        "fintech": "PYPL",
+        "payment": "V",
+        "ai": "MSFT",
+        "saas": "CRM",
+        "education": "COUR",
+        "health": "UNH",
+    }
 
-    # 🔥 IMPROVED PROMPT (VERY IMPORTANT)
+    stock_symbol = "AAPL"  # fallback
+
+    for key in industry_map:
+        if key in idea:
+            stock_symbol = industry_map[key]
+
+    # 📈 REAL FINANCIAL SIGNAL
+    stock_data = get_stock_data(stock_symbol)
+
+    # 🔥 BUILD CONTEXT
+    financial_context = f"""
+Industry benchmark ({stock_symbol}):
+Revenue: {stock_data.get("revenue")}
+Market Cap: {stock_data.get("market_cap")}
+Growth: {stock_data.get("growth")}
+"""
+
+    # 🔥 🔥 REAL ANALYSIS PROMPT
     prompt = f"""
+You are a startup financial analyst.
+
 Startup Idea:
 {idea}
 
 Comparable companies:
 {comp_names}
 
-Reference financial data:
-{stock_data}
+REAL INDUSTRY FINANCIAL DATA:
+{financial_context}
 
-INSTRUCTIONS:
-- Generate realistic startup financials
-- Base projections on comparable companies
-- Avoid generic or random numbers
-- Keep it structured and investor-ready
+CRITICAL INSTRUCTIONS:
+- Base projections on industry benchmarks
+- DO NOT use generic numbers
+- Adjust numbers based on industry type
+- Use realistic startup scaling assumptions
+- Explain reasoning implicitly through numbers
 
-STRICT FORMAT:
+EXAMPLES:
+Food delivery → high CAC, lower margins  
+Fintech → high LTV, strong margins  
+AI SaaS → subscription model, high margin  
+
+IMPORTANT:
+You are ANALYZING financials, not guessing.
+
+FORMAT:
 
 Cost Structure:
 - 
 
 Revenue Projections:
-- Year 1:
-- Year 2:
-- Year 3:
+- Year 1: $
+- Year 2: $
+- Year 3: $
 
 Profit & Loss Forecast:
 
 Break-even Analysis:
 
 Unit Economics:
-- Revenue per user:
-- CAC:
-- LTV:
-- Margin:
+- Revenue per user: $
+- CAC: $
+- LTV: $
+- Margin: %
 
 Pricing Strategy:
 
@@ -64,15 +101,13 @@ Financial Risks:
 """
 
     try:
-        output = llm.invoke(prompt[:2000])
+        output = llm.invoke(prompt[:3000])
 
-        # 🔥 FIX: handle AIMessage if returned
         if hasattr(output, "content"):
             output = output.content
 
         result = output.strip()
 
-        # 🔥 VALIDATION (important)
         if result and len(result) > 150 and "Revenue Projections" in result:
             state["financials"] = result
             return state
@@ -80,7 +115,7 @@ Financial Risks:
     except Exception as e:
         print("Finance agent error:", e)
 
-    # 🔥 FALLBACK (your structure kept but improved)
+    # 🔥 FALLBACK (UNCHANGED)
     fallback = f"""
 Cost Structure:
 - Development, marketing, operations
@@ -118,6 +153,5 @@ Financial Risks:
 - Competition
 - Scaling challenges
 """
-
     state["financials"] = fallback.strip()
     return state

@@ -1,5 +1,5 @@
 import React from "react";
-import { Brain, Target, Lightbulb } from "lucide-react";
+import { Brain } from "lucide-react";
 
 function BusinessView({ data }) {
   if (!data) {
@@ -12,159 +12,138 @@ function BusinessView({ data }) {
 
   const text = data?.business_model || "";
 
-  // 🔥 SMART SECTION EXTRACTOR
+  // 🔥 EXTRACTION
   const extractSection = (label, fallback) => {
-    const regex = new RegExp(label + ":(.*?)(\\n\\n|$)", "is");
-    const match = text.match(regex);
+    const match = text.match(new RegExp(label + ":(.*?)(\\n[A-Z]|$)", "is"));
     return match ? match[1].trim() : fallback;
   };
 
-  // 🔥 EXTRACT DATA PROPERLY
-  const problem = extractSection(
-    "Problem Statement",
-    "Users face inefficiencies in current systems."
-  );
-
-  const solution = extractSection(
-    "Solution Overview",
-    "AI-powered platform solving core problems."
-  );
-
-  const usp = extractSection(
-    "Unique Selling Proposition",
-    "Differentiated AI-driven approach with scalability."
-  );
-
-  const resources = extractSection(
-    "Key Resources",
-    "Technology, team, and infrastructure."
-  ).split("\n");
-
-  // 🔥 SWOT EXTRACTION
   const extractList = (label, fallback) => {
-    const regex = new RegExp(label + ":(.*?)(\\n[A-Z]|$)", "is");
-    const match = text.match(regex);
-    if (!match) return fallback;
+    const section = extractSection(label, "");
+    if (!section) return fallback;
 
-    return match[1]
+    return section
       .split("\n")
       .map((l) => l.replace("-", "").trim())
       .filter((l) => l.length > 5);
   };
 
+  const problem = extractSection("Problem Statement", "Problem varies");
+  const solution = extractSection("Solution Overview", "Solution varies");
+  const usp = extractSection("Unique Selling Proposition", "Unique advantage");
+
+  const resources = extractList("Key Resources", [
+    "Technology",
+    "Team",
+    "Infrastructure",
+  ]);
+
   const strengths = extractList("Strengths", ["Strong innovation"]);
-  const weaknesses = extractList("Weaknesses", ["Early-stage risks"]);
-  const opportunities = extractList("Opportunities", ["Growing demand"]);
-  const threats = extractList("Threats", ["Market competition"]);
+  const weaknesses = extractList("Weaknesses", ["Execution risk"]);
+  const opportunities = extractList("Opportunities", ["Market growth"]);
+  const threats = extractList("Threats", ["Competition"]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 animate-fade-in">
 
-      {/* 🔥 HEADER */}
+      {/* HEADER */}
       <div className="flex items-center gap-3">
         <Brain className="text-emerald-400" />
         <h1 className="text-3xl font-bold">Business Analysis</h1>
       </div>
 
-      {/* 🧠 PROBLEM + SOLUTION */}
+      <p className="text-sm text-emerald-400">
+        ● Live Business Strategy Engine
+      </p>
+
+      {/* PROBLEM + SOLUTION */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-          <h2 className="text-xl font-semibold mb-3">🚨 Problem</h2>
-          <p className="text-gray-300">{problem}</p>
-        </div>
+        <Card title="🚨 Problem">
+          <p>{problem}</p>
+        </Card>
 
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-          <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
-            <Lightbulb className="text-emerald-400" />
-            Solution
-          </h2>
-          <p className="text-gray-300">{solution}</p>
-        </div>
+        <Card title="💡 Solution">
+          <p>{solution}</p>
+        </Card>
 
       </div>
 
-      {/* 📊 SWOT ANALYSIS */}
-      <div className="p-6 rounded-xl bg-white/5 border border-white/10">
+      {/* SWOT */}
+      <div className="glass-card p-6">
         <h2 className="text-xl font-semibold mb-4">📊 SWOT Analysis</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          <div className="p-4 bg-white/5 rounded-lg">
-            <h3 className="font-semibold text-emerald-400 mb-2">Strengths</h3>
-            <ul className="text-gray-300 space-y-1">
-              {strengths.slice(0, 3).map((s, i) => (
-                <li key={i}>• {s}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="p-4 bg-white/5 rounded-lg">
-            <h3 className="font-semibold text-red-400 mb-2">Weaknesses</h3>
-            <ul className="text-gray-300 space-y-1">
-              {weaknesses.slice(0, 3).map((s, i) => (
-                <li key={i}>• {s}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="p-4 bg-white/5 rounded-lg">
-            <h3 className="font-semibold text-blue-400 mb-2">Opportunities</h3>
-            <ul className="text-gray-300 space-y-1">
-              {opportunities.slice(0, 3).map((s, i) => (
-                <li key={i}>• {s}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="p-4 bg-white/5 rounded-lg">
-            <h3 className="font-semibold text-yellow-400 mb-2">Threats</h3>
-            <ul className="text-gray-300 space-y-1">
-              {threats.slice(0, 3).map((s, i) => (
-                <li key={i}>• {s}</li>
-              ))}
-            </ul>
-          </div>
+          <SWOT title="Strengths" items={strengths} color="emerald" />
+          <SWOT title="Weaknesses" items={weaknesses} color="red" />
+          <SWOT title="Opportunities" items={opportunities} color="blue" />
+          <SWOT title="Threats" items={threats} color="yellow" />
 
         </div>
       </div>
 
-      {/* 🎯 USP + RESOURCES */}
+      {/* USP + RESOURCES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <Target className="text-emerald-400" />
-            Unique Selling Proposition
-          </h2>
-          <p className="text-gray-300">{usp}</p>
-        </div>
+        <Card title="🎯 Unique Selling Proposition">
+          <p>{usp}</p>
+        </Card>
 
-        <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-          <h2 className="text-xl font-semibold mb-4">
-            🧩 Key Resources
-          </h2>
-
-          <ul className="text-gray-300 space-y-2">
+        <Card title="🧩 Key Resources">
+          <ul className="space-y-2">
             {resources.slice(0, 4).map((r, i) => (
               <li key={i}>• {r}</li>
             ))}
           </ul>
-        </div>
+        </Card>
 
       </div>
 
-      {/* 📄 RAW AI OUTPUT */}
-      <div className="p-6 rounded-xl bg-white/5 border border-white/10">
+      {/* RAW */}
+      <div className="glass-card p-6">
         <h2 className="text-xl font-semibold mb-4">
           📄 Business Model Details
         </h2>
 
-        <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">
-          {data.business_model}
+        <div className="text-gray-300 whitespace-pre-wrap">
+          {text}
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// 🔥 CARD
+function Card({ title, children }) {
+  return (
+    <div className="glass-card p-6">
+      <h2 className="text-xl font-semibold mb-3">{title}</h2>
+      <div className="text-gray-300">{children}</div>
+    </div>
+  );
+}
+
+// 🔥 FIXED SWOT COLORS
+function SWOT({ title, items, color }) {
+  const colorMap = {
+    emerald: "text-emerald-400",
+    red: "text-red-400",
+    blue: "text-blue-400",
+    yellow: "text-yellow-400",
+  };
+
+  return (
+    <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+      <h3 className={`font-semibold ${colorMap[color]} mb-2`}>
+        {title}
+      </h3>
+      <ul className="text-gray-300 space-y-1">
+        {items.slice(0, 3).map((item, i) => (
+          <li key={i}>• {item}</li>
+        ))}
+      </ul>
     </div>
   );
 }

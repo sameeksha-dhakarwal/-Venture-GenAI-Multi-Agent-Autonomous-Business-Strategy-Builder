@@ -9,29 +9,46 @@ def competitor_agent(state):
     # 🔥 STEP 1: GET REAL COMPETITORS
     real_comps = get_competitors(idea)
 
-    # Extract only names
     comp_names = [c["name"] for c in real_comps if c.get("name")]
+    comp_links = [c["link"] for c in real_comps if c.get("link")]
 
-    # If API fails → fallback
     if not comp_names:
         comp_names = ["No real data found"]
 
-    # 🔥 STEP 2: GIVE REAL DATA TO LLM
+    # 🔥 NEW — BUILD REAL CONTEXT
+    comp_context = ""
+
+    for c in real_comps:
+        name = c.get("name", "")
+        link = c.get("link", "")
+        comp_context += f"{name} ({link})\n"
+
+    # 🔥 🔥 REAL DATA DRIVEN PROMPT
     prompt = f"""
-You are a Competitive Intelligence AI.
+You are a competitive intelligence analyst.
 
 Startup Idea:
 {idea}
 
-REAL competitors (from Google search):
+REAL COMPETITORS:
 {comp_names}
 
-INSTRUCTIONS:
-- Use ONLY these companies
-- Do NOT generate fake names
-- Be realistic and specific
+COMPETITOR SOURCES:
+{comp_context}
 
-STRICT FORMAT:
+CRITICAL INSTRUCTIONS:
+- Use ONLY these competitors
+- Do NOT invent companies
+- Use real-world reasoning
+- Compare competitors realistically
+- Mention differences between them
+- Use approximate real-world numbers
+- Avoid generic statements
+
+IMPORTANT:
+You are ANALYZING competitors, not generating fake ones.
+
+FORMAT:
 
 Competitor List:
 - Name:
@@ -72,10 +89,14 @@ Benchmark Metrics:
 """
 
     try:
-        output = llm.invoke(prompt)
+        output = llm.invoke(prompt[:2500])
 
-        if output and len(output) > 100:
-            state["competitors"] = output
+        # 🔥 FIX AIMessage issue
+        if hasattr(output, "content"):
+            output = output.content
+
+        if output and len(output.strip()) > 150:
+            state["competitors"] = output.strip()
             return state
 
     except Exception as e:
