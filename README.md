@@ -11,4 +11,4 @@ Terminal 3
 cd venture-ui
 npm run dev
 
-Market view
+
