@@ -18,15 +18,64 @@ export default function CompetitorView({ data }) {
 
   const text = data?.competitors || "";
 
-  // 🔥 EXTRACT COMPETITORS
+  // 🔥 FULL STRUCTURED EXTRACTION
   const extractCompetitors = (text) => {
-    const matches = text.match(/Name:\s*(.+)/gi);
-    return matches ? matches.map(m => m.replace(/Name:/i, "").trim()) : [];
+    const blocks = text.split("- Name:").slice(1);
+
+    return blocks.map((block) => {
+      const getField = (label) => {
+        const match = block.match(new RegExp(label + ".*?:\\s*(.*)", "i"));
+        return match ? match[1].trim() : "N/A";
+      };
+
+      return {
+        name: block.split("\n")[0].trim(),
+        segment: getField("Segment"),
+        pricing: getField("Pricing"),
+        market: getField("Target Market"),
+      };
+    });
   };
 
   const competitors = extractCompetitors(text);
 
-  // 🔥 SAFE NUMBER EXTRACTION (NO RANDOM)
+  // 🔥 MARKET SHARE EXTRACTION
+  const extractMarketShare = (text) => {
+    const lines = text.split("\n");
+    const data = [];
+
+    lines.forEach((line) => {
+      const match = line.match(
+        /(Leader|Mid-tier|Emerging).*?:\s*(.*?),.*?(\d+)%/i
+      );
+
+      if (match) {
+        data.push({
+          role: match[1],
+          name: match[2],
+          share: parseInt(match[3]),
+        });
+      }
+    });
+
+    return data;
+  };
+
+  const marketShareData = extractMarketShare(text);
+
+  // 🔥 MERGE ROLE
+  const competitorsWithRole = competitors.map((comp) => {
+    const match = marketShareData.find((m) =>
+      comp.name.toLowerCase().includes(m.name.toLowerCase())
+    );
+
+    return {
+      ...comp,
+      role: match ? match.role : "N/A",
+    };
+  });
+
+  // 🔥 SAFE NUMBER EXTRACTION
   const getNumber = (label, fallback) => {
     const match = text.match(new RegExp(label + ".*?(\\d+)", "i"));
     return match ? parseInt(match[1]) : fallback;
@@ -37,6 +86,70 @@ export default function CompetitorView({ data }) {
     { name: "CAC ($)", value: getNumber("CAC", 120) },
     { name: "Churn (%)", value: getNumber("Churn", 5) },
     { name: "Growth (%)", value: getNumber("Growth", 15) },
+  ];
+
+  // ================= NEW PARSERS =================
+
+  const extractSection = (title) => {
+    const regex = new RegExp(title + ":(.*?)(\\n\\n|$)", "is");
+    const match = text.match(regex);
+    return match ? match[1].trim() : "";
+  };
+
+  // 🔥 FEATURE COMPARISON
+  const featureText = extractSection("Feature Comparison");
+
+  const features = ["Features", "Pricing", "UX", "Support", "Scalability"].map((f) => {
+    const match = featureText.match(new RegExp(f + ".*?:\\s*(.*)", "i"));
+    return {
+      title: f,
+      value: match ? match[1] : "N/A",
+    };
+  });
+
+  // 🔥 SWOT
+  const swText = extractSection("Strengths & Weaknesses");
+
+  const strengths =
+    swText.match(/Strengths:(.*?)(Weaknesses|$)/is)?.[1]
+      ?.split("\n")
+      .map((s) => s.replace("-", "").trim())
+      .filter((s) => s.length > 10) || [];
+
+  const weaknesses =
+    swText.match(/Weaknesses:(.*)/is)?.[1]
+      ?.split("\n")
+      .map((s) => s.replace("-", "").trim())
+      .filter((s) => s.length > 10) || [];
+
+  // 🔥 GAPS
+  const gapsText = extractSection("Competitive Gaps");
+
+  const gaps = gapsText
+    .split("\n")
+    .map((g) => g.replace("-", "").trim())
+    .filter((g) => g.length > 10);
+
+  // 🔥 BENCHMARK METRICS
+  const benchmarkText = extractSection("Benchmark Metrics");
+
+  const benchmarkMetrics = [
+    {
+      title: "Market Share",
+      value: benchmarkText.match(/Market Share:(.*)/i)?.[1]?.trim() || "N/A",
+    },
+    {
+      title: "CAC",
+      value: benchmarkText.match(/CAC:(.*)/i)?.[1]?.trim() || "N/A",
+    },
+    {
+      title: "Churn",
+      value: benchmarkText.match(/Churn:(.*)/i)?.[1]?.trim() || "N/A",
+    },
+    {
+      title: "Growth",
+      value: benchmarkText.match(/Growth Rate:(.*)/i)?.[1]?.trim() || "N/A",
+    },
   ];
 
   return (
@@ -50,65 +163,137 @@ export default function CompetitorView({ data }) {
 
       {/* 🏢 COMPETITORS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {(competitors.length ? competitors : ["No competitors found"]).map((comp, i) => (
+        {(competitorsWithRole.length
+          ? competitorsWithRole
+          : [{ name: "No competitors found" }]
+        ).map((comp, i) => (
           <div key={i} className="glass-card p-6">
-            <h2 className="text-lg font-semibold">{comp}</h2>
-            <p className="text-gray-400 text-sm mt-1">
+            <h2 className="text-lg font-semibold">{comp.name}</h2>
+
+            <p className={`mt-2 text-xs font-semibold px-2 py-1 inline-block rounded ${
+              comp.role === "Leader"
+                ? "bg-green-500/20 text-green-400"
+                : comp.role === "Mid-tier"
+                ? "bg-blue-500/20 text-blue-400"
+                : comp.role === "Emerging"
+                ? "bg-yellow-500/20 text-yellow-400"
+                : "bg-gray-500/20 text-gray-400"
+            }`}>
+              {comp.role}
+            </p>
+
+            <p className="text-gray-400 text-sm mt-2">
               Real-world competitor
             </p>
+
+            <div className="mt-4 text-sm text-gray-300 space-y-2">
+              <p><b>Segment:</b> {comp.segment}</p>
+              <p><b>Pricing:</b> {comp.pricing}</p>
+              <p><b>Target:</b> {comp.market}</p>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* 📊 METRICS BAR CHART */}
-      <div className="glass-card p-6">
-        <h2 className="text-xl font-semibold mb-4">📊 Key Metrics</h2>
+      {/* 🔥 CHARTS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={metrics}>
-            <XAxis dataKey="name" stroke="#ccc" />
-            <Tooltip />
-            <Bar dataKey="value" fill="#10b981" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-
-        {/* 🔥 EXPLANATION */}
-        <div className="mt-4 text-sm text-gray-400 space-y-1">
-          <p><b>Market Share:</b> % of market controlled</p>
-          <p><b>CAC:</b> Cost to acquire a customer</p>
-          <p><b>Churn:</b> % of users leaving</p>
-          <p><b>Growth:</b> yearly growth rate</p>
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold mb-4">📊 Key Metrics</h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={metrics}>
+              <XAxis dataKey="name" stroke="#ccc" />
+              <Tooltip />
+              <Bar dataKey="value" fill="#10b981" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
+
+        {marketShareData.length > 0 && (
+          <div className="glass-card p-6">
+            <h2 className="text-xl font-semibold mb-4">
+              📊 Market Share Distribution
+            </h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={marketShareData}>
+                <XAxis dataKey="name" stroke="#ccc" />
+                <Tooltip />
+                <Bar dataKey="share" fill="#3b82f6" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
       </div>
 
       {/* 💰 PRICING */}
       <div className="glass-card p-6">
         <h2 className="text-xl font-semibold mb-4">💰 Pricing Comparison</h2>
-
         <table className="w-full text-sm text-gray-300">
-          <thead>
-            <tr>
-              <th className="text-left">Tier</th>
-              <th>Basic</th>
-              <th>Pro</th>
-              <th>Enterprise</th>
-            </tr>
-          </thead>
           <tbody>
             <tr>
-              <td>Pricing</td>
+              <td>Basic</td>
               <td>${getNumber("Free", 0)}</td>
+              <td>Pro</td>
               <td>${getNumber("Pro", 29)}</td>
+              <td>Enterprise</td>
               <td>${getNumber("Enterprise", 199)}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      {/* 📄 RAW INSIGHTS */}
+      {/* 📊 FEATURE COMPARISON */}
       <div className="glass-card p-6">
-        <h2 className="text-xl font-semibold mb-4">📄 AI Insights</h2>
-        <div className="text-gray-300 whitespace-pre-wrap">{text}</div>
+        <h2 className="text-xl font-semibold mb-4">📊 Feature Comparison</h2>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {features.map((f, i) => (
+            <div key={i} className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-400">{f.title}</p>
+              <p className="text-sm mt-2">{f.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 💪 SWOT */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div className="glass-card p-6">
+          <h2 className="text-xl text-green-400 mb-4">Strengths</h2>
+          {strengths.map((s, i) => <p key={i}>• {s}</p>)}
+        </div>
+
+        <div className="glass-card p-6">
+          <h2 className="text-xl text-red-400 mb-4">Weaknesses</h2>
+          {weaknesses.map((w, i) => <p key={i}>• {w}</p>)}
+        </div>
+
+      </div>
+
+      {/* ⚡ GAPS */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">⚡ Competitive Gaps</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {gaps.map((g, i) => (
+            <div key={i} className="bg-white/5 p-4 rounded-lg">
+              {g}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 📊 BENCHMARK METRICS */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">📊 Benchmark Metrics</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {benchmarkMetrics.map((m, i) => (
+            <div key={i} className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-400">{m.title}</p>
+              <p className="text-sm mt-2">{m.value}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
     </div>
