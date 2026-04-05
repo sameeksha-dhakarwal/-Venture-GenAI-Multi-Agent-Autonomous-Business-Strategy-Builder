@@ -39,39 +39,45 @@ export default function CompetitorView({ data }) {
 
   const competitors = extractCompetitors(text);
 
-  // 🔥 MARKET SHARE EXTRACTION
+  // 🔥 FIXED MARKET SHARE EXTRACTION (ROBUST)
   const extractMarketShare = (text) => {
-    const lines = text.split("\n");
-    const data = [];
+    const roles = ["Leader", "Mid-tier", "Emerging"];
 
-    lines.forEach((line) => {
-      const match = line.match(
-        /(Leader|Mid-tier|Emerging).*?:\s*(.*?),.*?(\d+)%/i
-      );
+    return roles
+      .map((role) => {
+        const line = text
+          .split("\n")
+          .find((l) => l.toLowerCase().includes(role.toLowerCase()));
 
-      if (match) {
-        data.push({
-          role: match[1],
-          name: match[2],
-          share: parseInt(match[3]),
-        });
-      }
-    });
+        if (!line) return null;
 
-    return data;
+        const percentMatch = line.match(/(\d+)%/);
+        const nameMatch = line.match(
+          /:\s*(.*?)(,|with|holding|competing|$)/i
+        );
+
+        return {
+          role,
+          name: nameMatch ? nameMatch[1].trim() : "",
+          share: percentMatch ? parseInt(percentMatch[1]) : 0,
+        };
+      })
+      .filter(Boolean);
   };
 
   const marketShareData = extractMarketShare(text);
 
-  // 🔥 MERGE ROLE
+  // 🔥 FIXED ROLE MATCHING (VERY IMPORTANT)
   const competitorsWithRole = competitors.map((comp) => {
-    const match = marketShareData.find((m) =>
-      comp.name.toLowerCase().includes(m.name.toLowerCase())
+    const match = marketShareData.find(
+      (m) =>
+        m.name.toLowerCase().includes(comp.name.toLowerCase()) ||
+        comp.name.toLowerCase().includes(m.name.toLowerCase())
     );
 
     return {
       ...comp,
-      role: match ? match.role : "N/A",
+      role: match ? match.role : "",
     };
   });
 
@@ -107,20 +113,20 @@ export default function CompetitorView({ data }) {
     };
   });
 
-  // 🔥 SWOT
+  // 🔥 SWOT (MORE RELIABLE)
   const swText = extractSection("Strengths & Weaknesses");
 
   const strengths =
     swText.match(/Strengths:(.*?)(Weaknesses|$)/is)?.[1]
       ?.split("\n")
       .map((s) => s.replace("-", "").trim())
-      .filter((s) => s.length > 10) || [];
+      .filter((s) => s.length > 5) || [];
 
   const weaknesses =
     swText.match(/Weaknesses:(.*)/is)?.[1]
       ?.split("\n")
       .map((s) => s.replace("-", "").trim())
-      .filter((s) => s.length > 10) || [];
+      .filter((s) => s.length > 5) || [];
 
   // 🔥 GAPS
   const gapsText = extractSection("Competitive Gaps");
@@ -128,7 +134,7 @@ export default function CompetitorView({ data }) {
   const gaps = gapsText
     .split("\n")
     .map((g) => g.replace("-", "").trim())
-    .filter((g) => g.length > 10);
+    .filter((g) => g.length > 5);
 
   // 🔥 BENCHMARK METRICS
   const benchmarkText = extractSection("Benchmark Metrics");
@@ -170,17 +176,17 @@ export default function CompetitorView({ data }) {
           <div key={i} className="glass-card p-6">
             <h2 className="text-lg font-semibold">{comp.name}</h2>
 
-            <p className={`mt-2 text-xs font-semibold px-2 py-1 inline-block rounded ${
-              comp.role === "Leader"
-                ? "bg-green-500/20 text-green-400"
-                : comp.role === "Mid-tier"
-                ? "bg-blue-500/20 text-blue-400"
-                : comp.role === "Emerging"
-                ? "bg-yellow-500/20 text-yellow-400"
-                : "bg-gray-500/20 text-gray-400"
-            }`}>
-              {comp.role}
-            </p>
+            {comp.role && (
+              <p className={`mt-2 text-xs font-semibold px-2 py-1 inline-block rounded ${
+                comp.role === "Leader"
+                  ? "bg-green-500/20 text-green-400"
+                  : comp.role === "Mid-tier"
+                  ? "bg-blue-500/20 text-blue-400"
+                  : "bg-yellow-500/20 text-yellow-400"
+              }`}>
+                {comp.role}
+              </p>
+            )}
 
             <p className="text-gray-400 text-sm mt-2">
               Real-world competitor
@@ -209,20 +215,25 @@ export default function CompetitorView({ data }) {
           </ResponsiveContainer>
         </div>
 
-        {marketShareData.length > 0 && (
-          <div className="glass-card p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              📊 Market Share Distribution
-            </h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={marketShareData}>
-                <XAxis dataKey="name" stroke="#ccc" />
-                <Tooltip />
-                <Bar dataKey="share" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        {/* 🔥 ALWAYS SHOW MARKET GRAPH */}
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold mb-4">
+            📊 Market Share Distribution
+          </h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart
+              data={
+                marketShareData.length
+                  ? marketShareData
+                  : [{ name: "No Data", share: 0 }]
+              }
+            >
+              <XAxis dataKey="name" stroke="#ccc" />
+              <Tooltip />
+              <Bar dataKey="share" fill="#3b82f6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
 
       </div>
 
