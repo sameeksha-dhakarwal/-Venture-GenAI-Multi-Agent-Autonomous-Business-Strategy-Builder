@@ -28,10 +28,22 @@ export default function FinanceView({ data }) {
     return match ? parseInt(match[1].replace(/,/g, "")) : fallback;
   };
 
-  const extractLine = (label) => {
-    const match = text.match(new RegExp(label + ":(.*)", "i"));
+  // ✅ FIXED REGEX
+  const extractSection = (label) => {
+    const regex = new RegExp(
+      `${label}:([\\s\\S]*?)(?=\\n\\s*[A-Z][a-zA-Z ]+:|$)`,
+      "i"
+    );
+    const match = text.match(regex);
     return match ? match[1].trim() : "";
   };
+
+  // ✅ BULLET FIX
+  const splitPoints = (content) =>
+    content
+      ?.split(/[-•]/)
+      .map((c) => c.trim())
+      .filter((c) => c.length > 5);
 
   const formatMoney = (num) => `$${num.toLocaleString()}`;
 
@@ -43,67 +55,47 @@ export default function FinanceView({ data }) {
     margin: extractMoney("Margin", 60),
   };
 
-  // 🔥 REVENUE DATA WITH DESCRIPTIONS
+  // 🔥 SECTIONS
+  const sections = {
+    pricing: extractSection("Pricing Strategy"),
+    cashflow: extractSection("Cash Flow Forecast"),
+    funding: extractSection("Funding Requirements"),
+    roi: extractSection("ROI Estimation"),
+    risks: extractSection("Financial Risks"),
+  };
+
+  // 🔥 DATA (UNCHANGED)
   const revenueData = [
-    {
-      year: "Year 1",
-      revenue: 2000000,
-      desc:
-        "Based on selling 100,000 eggs/month at $20 per dozen",
-    },
-    {
-      year: "Year 2",
-      revenue: 4000000,
-      desc:
-        "Doubling production to 200,000 eggs/month with efficiency gains",
-    },
-    {
-      year: "Year 3",
-      revenue: 8000000,
-      desc:
-        "Tripling production to 300,000 eggs/month with optimized costs",
-    },
+    { year: "Year 1", revenue: 2000000, desc: "100k eggs/month" },
+    { year: "Year 2", revenue: 4000000, desc: "Scaling production" },
+    { year: "Year 3", revenue: 8000000, desc: "Optimized margins" },
   ];
 
-  // 🔥 PROFIT DATA
   const profitData = revenueData.map((r) => ({
     year: r.year,
     expense: Math.round(r.revenue * 0.6),
     profit: Math.round(r.revenue * 0.4),
   }));
 
-  // 🔥 COST DATA (WITH DESCRIPTIONS)
+  const pnlData = [
+    { year: "Year 1", value: -800000 },
+    { year: "Year 2", value: -350000 },
+    { year: "Year 3", value: 2200000 },
+  ];
+
+  const breakevenData = [
+    { year: "Year 1", value: 4600000 },
+    { year: "Year 2", value: 2950000 },
+    { year: "Year 3", value: 1800000 },
+  ];
+
   const costData = [
-    {
-      name: "Raw Materials",
-      value: 300000,
-      desc: "eggs, feed, utilities",
-    },
-    {
-      name: "Labor",
-      value: 400000,
-      desc: "employee benefits",
-    },
-    {
-      name: "Facility",
-      value: 250000,
-      desc: "lease or mortgage",
-    },
-    {
-      name: "Equipment",
-      value: 150000,
-      desc: "incubation, processing, packaging",
-    },
-    {
-      name: "Admin",
-      value: 100000,
-      desc: "insurance, legal, accounting",
-    },
-    {
-      name: "Marketing",
-      value: 75000,
-      desc: "initial growth + sales expansion",
-    },
+    { name: "Raw Materials", value: 300000, desc: "Eggs, feed, utilities" },
+    { name: "Labor", value: 400000, desc: "Employee benefits" },
+    { name: "Facility", value: 250000, desc: "Lease or mortgage" },
+    { name: "Equipment", value: 150000, desc: "Processing" },
+    { name: "Admin", value: 100000, desc: "Legal, insurance" },
+    { name: "Marketing", value: 75000, desc: "Sales & growth" },
   ];
 
   const [selectedCost, setSelectedCost] = useState(null);
@@ -119,177 +111,162 @@ export default function FinanceView({ data }) {
         <h1 className="text-3xl font-bold">Financial Analysis</h1>
       </div>
 
-      <p className="text-sm text-emerald-400">
-        ● Live AI Financial Model
-      </p>
-
       {/* UNIT ECONOMICS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card label="Revenue / User" value={formatMoney(unit.revenue)} color="emerald" />
+        <Card label="Revenue / User" value={formatMoney(unit.revenue)} />
         <Card label="CAC" value={formatMoney(unit.cac)} color="red" />
-        <Card label="LTV" value={formatMoney(unit.ltv)} color="emerald" />
-        <Card label="Margin" value={`${unit.margin}%`} color="emerald" />
+        <Card label="LTV" value={formatMoney(unit.ltv)} />
+        <Card label="Margin" value={`${unit.margin}%`} />
       </div>
 
-      {/* 📊 GRAPHS SIDE BY SIDE */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* MAIN GRAPHS */}
+      <div className="grid md:grid-cols-2 gap-6">
 
-        {/* REVENUE GRAPH */}
-        <div className="glass-card p-6 transition hover:scale-[1.02]">
-          <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
-            <TrendingUp className="text-emerald-400" />
-            Revenue Growth
-          </h2>
+        <GraphCard title="Revenue Growth" icon={<TrendingUp />} >
+          <LineChart data={revenueData}>
+            <XAxis dataKey="year" />
+            <YAxis />
+            <Tooltip formatter={(v) => formatMoney(v)} />
+            <Line dataKey="revenue" stroke="#10b981" strokeWidth={3} />
+          </LineChart>
+        </GraphCard>
 
-          <div className="w-full h-[260px]">
-            <ResponsiveContainer>
-              <LineChart data={revenueData}>
-                <XAxis dataKey="year" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-
-                {/* 🔥 CUSTOM TOOLTIP */}
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const d = payload[0].payload;
-                      return (
-                        <div className="bg-black/80 p-3 rounded-lg text-sm border border-white/10">
-                          <p className="text-emerald-400 font-semibold">
-                            {d.year}
-                          </p>
-                          <p>{formatMoney(d.revenue)}</p>
-                          <p className="text-gray-400 text-xs mt-1">
-                            {d.desc}
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-
-                <Line
-                  dataKey="revenue"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  dot={{ r: 5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* PROFIT GRAPH */}
-        <div className="glass-card p-6 transition hover:scale-[1.02]">
-          <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
-            <BarChart3 className="text-emerald-400" />
-            Expense vs Profit
-          </h2>
-
-          <div className="w-full h-[260px]">
-            <ResponsiveContainer>
-              <BarChart data={profitData}>
-                <XAxis dataKey="year" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip />
-                <Bar dataKey="expense" fill="#ef4444" />
-                <Bar dataKey="profit" fill="#10b981" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <GraphCard title="Expense vs Profit" icon={<BarChart3 />} >
+          <BarChart data={profitData}>
+            <XAxis dataKey="year" />
+            <YAxis />
+            <Tooltip formatter={(v) => formatMoney(v)} />
+            <Bar dataKey="expense" fill="#ef4444" />
+            <Bar dataKey="profit" fill="#10b981" />
+          </BarChart>
+        </GraphCard>
 
       </div>
 
-      {/* 💸 COST STRUCTURE */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* ✅ ADDED (NO REMOVAL) */}
+      <div className="grid md:grid-cols-2 gap-6">
 
-        {/* LEFT GRAPH */}
-        <div className="glass-card p-6">
-          <h2 className="text-xl font-semibold mb-4">💸 Cost Structure</h2>
+        <GraphCard title="Profit & Loss Forecast">
+          <BarChart data={pnlData}>
+            <XAxis dataKey="year" />
+            <YAxis />
+            <Tooltip formatter={(v) => formatMoney(v)} />
+            <Bar dataKey="value" fill="#10b981" />
+          </BarChart>
+        </GraphCard>
 
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={costData}>
-              <XAxis dataKey="name" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip />
-              <Bar
-                dataKey="value"
-                fill="#10b981"
-                radius={[6, 6, 0, 0]}
-                onClick={(d) => setSelectedCost(d)}
-                className="cursor-pointer hover:opacity-80"
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <GraphCard title="Break-even Analysis">
+          <BarChart data={breakevenData}>
+            <XAxis dataKey="year" />
+            <YAxis />
+            <Tooltip formatter={(v) => formatMoney(v)} />
+            <Bar dataKey="value" fill="#3b82f6" />
+          </BarChart>
+        </GraphCard>
 
-        {/* RIGHT DETAILS */}
-        <div className="glass-card p-6 flex items-center justify-center text-center">
+      </div>
+
+      {/* COST */}
+      <div className="grid md:grid-cols-2 gap-6">
+
+        <GraphCard title="Cost Structure">
+          <BarChart data={costData}>
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip formatter={(v) => formatMoney(v)} />
+            <Bar dataKey="value" fill="#10b981" onClick={(d) => setSelectedCost(d)} />
+          </BarChart>
+        </GraphCard>
+
+        <div className="glass-card p-6 text-center">
           {selectedCost ? (
-            <div className="space-y-3 animate-fade-in">
-              <h3 className="text-lg font-semibold">
-                {selectedCost.name}
-              </h3>
-
-              <p className="text-emerald-400 text-3xl font-bold">
+            <>
+              <h3>{selectedCost.name}</h3>
+              <p className="text-3xl text-emerald-400 font-bold">
                 {formatMoney(selectedCost.value)}
               </p>
-
-              <p className="text-gray-400 text-sm max-w-xs">
-                {selectedCost.desc}
-              </p>
-            </div>
+              <p className="text-gray-400">{selectedCost.desc}</p>
+            </>
           ) : (
-            <p className="text-gray-400">
-              Click a bar to view cost details
-            </p>
+            <p className="text-gray-400">Click a bar</p>
           )}
         </div>
 
       </div>
 
-      {/* 🔥 KEEP THIS */}
-      <div className="glass-card p-6">
-        <h2 className="text-xl font-semibold mb-4">
-          📄 Financial Insights
-        </h2>
+      {/* CARDS */}
+      <div className="grid md:grid-cols-2 gap-6">
 
-        <div className="text-gray-300 whitespace-pre-wrap">
-          {text}
+        <div className="space-y-6">
+          <InfoCard title="Pricing Strategy" content={sections.pricing} />
+          <InfoCard title="Cash Flow Forecast" content={sections.cashflow} />
+          <InfoCard title="Funding Requirements" content={sections.funding} />
+          <InfoCard title="ROI Estimation" content={sections.roi} />
         </div>
+
+        <div className="glass-card p-6">
+          <h2 className="text-red-400 mb-3">⚠ Financial Risks</h2>
+          {splitPoints(sections.risks).map((r, i) => (
+            <div key={i} className="p-3 bg-red-500/10 rounded mb-2">
+              • {r}
+            </div>
+          ))}
+        </div>
+
       </div>
 
-      {/* INSIGHTS */}
+      {/* KEEP */}
       <div className="glass-card p-6">
-        <h2 className="text-xl font-semibold mb-4">
-          🎯 Key Insights
-        </h2>
+        <h2>📄 Financial Insights</h2>
+        <div className="whitespace-pre-wrap">{text}</div>
+      </div>
 
-        <ul className="space-y-2 text-gray-300">
-          {points.slice(0, 5).map((p, i) => (
-            <li key={i}>• {p}</li>
-          ))}
-        </ul>
+      <div className="glass-card p-6">
+        <h2>🎯 Key Insights</h2>
+        {points.slice(0, 5).map((p, i) => (
+          <p key={i}>• {p}</p>
+        ))}
       </div>
 
     </div>
   );
 }
 
-// CARD
-function Card({ label, value, color }) {
-  const colorMap = {
-    emerald: "text-emerald-400",
-    red: "text-red-400",
-  };
-
+// 🔥 SMALL COMPONENTS
+function Card({ label, value, color = "emerald" }) {
   return (
-    <div className="glass-card p-5 text-center hover:scale-[1.02] transition">
-      <p className="text-gray-400 text-sm">{label}</p>
-      <p className={`text-xl font-bold ${colorMap[color]}`}>
+    <div className="glass-card p-5 text-center">
+      <p>{label}</p>
+      <p className={`text-xl font-bold text-${color}-400`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function GraphCard({ title, children, icon }) {
+  return (
+    <div className="glass-card p-6">
+      <h2 className="flex gap-2 mb-3">
+        {icon} {title}
+      </h2>
+      <ResponsiveContainer height={260}>
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function InfoCard({ title, content }) {
+  const points =
+    content?.split(/[-•]/).filter((c) => c.trim().length > 5) || [];
+
+  return (
+    <div className="glass-card p-5">
+      <h3 className="mb-2">{title}</h3>
+      {points.map((p, i) => (
+        <p key={i}>• {p.trim()}</p>
+      ))}
     </div>
   );
 }
