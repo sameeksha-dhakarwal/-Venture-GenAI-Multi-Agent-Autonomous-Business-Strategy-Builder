@@ -1,5 +1,5 @@
 Terminal 1
-ollama run mistral
+ollama run mistral(slower but more efficient version)
 ollama run llama3
 
 Terminal 2
