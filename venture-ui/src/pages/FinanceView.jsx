@@ -22,13 +22,15 @@ export default function FinanceView({ data }) {
 
   const text = data?.financials || "";
 
-  // 🔥 HELPERS
+  // =========================
+  // HELPERS
+  // =========================
+
   const extractMoney = (label, fallback) => {
     const match = text.match(new RegExp(label + ".*?\\$?([0-9,]+)", "i"));
     return match ? parseInt(match[1].replace(/,/g, "")) : fallback;
   };
 
-  // ✅ FIXED REGEX
   const extractSection = (label) => {
     const regex = new RegExp(
       `${label}:([\\s\\S]*?)(?=\\n\\s*[A-Z][a-zA-Z ]+:|$)`,
@@ -38,7 +40,6 @@ export default function FinanceView({ data }) {
     return match ? match[1].trim() : "";
   };
 
-  // ✅ BULLET FIX
   const splitPoints = (content) =>
     content
       ?.split(/[-•]/)
@@ -47,7 +48,50 @@ export default function FinanceView({ data }) {
 
   const formatMoney = (num) => `$${num.toLocaleString()}`;
 
-  // 🔥 UNIT ECONOMICS
+  // ✅ NEW: EXTRACT YEARLY VALUES
+  const extractYearlyValues = (label) => {
+    const regex = new RegExp(
+      `${label}:[\\s\\S]*?Year 1.*?\\$?([0-9,]+)[\\s\\S]*?Year 2.*?\\$?([0-9,]+)[\\s\\S]*?Year 3.*?\\$?([0-9,]+)`,
+      "i"
+    );
+
+    const match = text.match(regex);
+
+    if (!match) return [0, 0, 0];
+
+    return [
+      parseInt(match[1].replace(/,/g, "")),
+      parseInt(match[2].replace(/,/g, "")),
+      parseInt(match[3].replace(/,/g, "")),
+    ];
+  };
+
+  // =========================
+  // BUSINESS MODEL DETECTION
+  // =========================
+
+  const detectBusinessModel = () => {
+    const t = text.toLowerCase();
+
+    if (t.includes("saas") || t.includes("software") || t.includes("app"))
+      return "saas";
+
+    if (t.includes("farm") || t.includes("agriculture") || t.includes("egg"))
+      return "agriculture";
+
+    if (t.includes("ecommerce") || t.includes("store") || t.includes("retail"))
+      return "ecommerce";
+
+    if (t.includes("ai") || t.includes("technology") || t.includes("platform"))
+      return "tech";
+
+    return "general";
+  };
+
+  // =========================
+  // UNIT ECONOMICS
+  // =========================
+
   const unit = {
     revenue: extractMoney("Revenue per user", 120),
     cac: extractMoney("CAC", 40),
@@ -55,7 +99,10 @@ export default function FinanceView({ data }) {
     margin: extractMoney("Margin", 60),
   };
 
-  // 🔥 SECTIONS
+  // =========================
+  // SECTIONS
+  // =========================
+
   const sections = {
     pricing: extractSection("Pricing Strategy"),
     cashflow: extractSection("Cash Flow Forecast"),
@@ -64,11 +111,16 @@ export default function FinanceView({ data }) {
     risks: extractSection("Financial Risks"),
   };
 
-  // 🔥 DATA (UNCHANGED)
+  // =========================
+  // 🔥 DYNAMIC DATA
+  // =========================
+
+  const [rev1, rev2, rev3] = extractYearlyValues("Revenue Projections");
+
   const revenueData = [
-    { year: "Year 1", revenue: 2000000, desc: "100k eggs/month" },
-    { year: "Year 2", revenue: 4000000, desc: "Scaling production" },
-    { year: "Year 3", revenue: 8000000, desc: "Optimized margins" },
+    { year: "Year 1", revenue: rev1 || 2000000 },
+    { year: "Year 2", revenue: rev2 || 4000000 },
+    { year: "Year 3", revenue: rev3 || 8000000 },
   ];
 
   const profitData = revenueData.map((r) => ({
@@ -77,29 +129,68 @@ export default function FinanceView({ data }) {
     profit: Math.round(r.revenue * 0.4),
   }));
 
-  const pnlData = [
-    { year: "Year 1", value: -800000 },
-    { year: "Year 2", value: -350000 },
-    { year: "Year 3", value: 2200000 },
-  ];
+  const pnlData = revenueData.map((r, i) => ({
+    year: r.year,
+    value: i === 0 ? -r.revenue * 0.4 : r.revenue * 0.3,
+  }));
 
-  const breakevenData = [
-    { year: "Year 1", value: 4600000 },
-    { year: "Year 2", value: 2950000 },
-    { year: "Year 3", value: 1800000 },
-  ];
+  const breakevenData = revenueData.map((r) => ({
+    year: r.year,
+    value: Math.round(r.revenue * 0.75),
+  }));
 
-  const costData = [
-    { name: "Raw Materials", value: 300000, desc: "Eggs, feed, utilities" },
-    { name: "Labor", value: 400000, desc: "Employee benefits" },
-    { name: "Facility", value: 250000, desc: "Lease or mortgage" },
-    { name: "Equipment", value: 150000, desc: "Processing" },
-    { name: "Admin", value: 100000, desc: "Legal, insurance" },
-    { name: "Marketing", value: 75000, desc: "Sales & growth" },
-  ];
+  // =========================
+  // 💡 DYNAMIC COST MODEL
+  // =========================
+
+  const model = detectBusinessModel();
+  const base = revenueData[0]?.revenue || 2000000;
+
+  let costData = [];
+
+  if (model === "saas") {
+    costData = [
+      { name: "Engineering", value: base * 0.35, desc: "Developers & tech team" },
+      { name: "Cloud Infra", value: base * 0.15, desc: "Servers & hosting" },
+      { name: "Marketing", value: base * 0.2, desc: "User acquisition" },
+      { name: "Operations", value: base * 0.1, desc: "Admin & support" },
+      { name: "Product", value: base * 0.1, desc: "Design & UX" },
+    ];
+  } else if (model === "agriculture") {
+    costData = [
+      { name: "Feed & Supplies", value: base * 0.25, desc: "Animal feed" },
+      { name: "Labor", value: base * 0.2, desc: "Farm workers" },
+      { name: "Facility", value: base * 0.15, desc: "Land & infrastructure" },
+      { name: "Logistics", value: base * 0.1, desc: "Transport & delivery" },
+      { name: "Veterinary", value: base * 0.08, desc: "Animal care" },
+    ];
+  } else if (model === "ecommerce") {
+    costData = [
+      { name: "Inventory", value: base * 0.4, desc: "Product sourcing" },
+      { name: "Marketing", value: base * 0.25, desc: "Ads & promotions" },
+      { name: "Logistics", value: base * 0.15, desc: "Shipping" },
+      { name: "Platform Fees", value: base * 0.1, desc: "Marketplace fees" },
+      { name: "Support", value: base * 0.05, desc: "Customer service" },
+    ];
+  } else if (model === "tech") {
+    costData = [
+      { name: "R&D", value: base * 0.3, desc: "Innovation & development" },
+      { name: "Infrastructure", value: base * 0.2, desc: "Cloud & systems" },
+      { name: "Talent", value: base * 0.2, desc: "Engineers & AI experts" },
+      { name: "Marketing", value: base * 0.15, desc: "Growth" },
+      { name: "Operations", value: base * 0.1, desc: "Admin" },
+    ];
+  } else {
+    costData = [
+      { name: "Operations", value: base * 0.25, desc: "General costs" },
+      { name: "Labor", value: base * 0.2, desc: "Staff" },
+      { name: "Marketing", value: base * 0.15, desc: "Growth" },
+      { name: "Infrastructure", value: base * 0.15, desc: "Setup" },
+      { name: "Admin", value: base * 0.1, desc: "Legal & misc" },
+    ];
+  }
 
   const [selectedCost, setSelectedCost] = useState(null);
-
   const points = text.split(".").filter((p) => p.trim().length > 20);
 
   return (
@@ -119,10 +210,9 @@ export default function FinanceView({ data }) {
         <Card label="Margin" value={`${unit.margin}%`} />
       </div>
 
-      {/* MAIN GRAPHS */}
+      {/* GRAPHS */}
       <div className="grid md:grid-cols-2 gap-6">
-
-        <GraphCard title="Revenue Growth" icon={<TrendingUp />} >
+        <GraphCard title="Revenue Growth" icon={<TrendingUp />}>
           <LineChart data={revenueData}>
             <XAxis dataKey="year" />
             <YAxis />
@@ -131,7 +221,7 @@ export default function FinanceView({ data }) {
           </LineChart>
         </GraphCard>
 
-        <GraphCard title="Expense vs Profit" icon={<BarChart3 />} >
+        <GraphCard title="Expense vs Profit" icon={<BarChart3 />}>
           <BarChart data={profitData}>
             <XAxis dataKey="year" />
             <YAxis />
@@ -140,12 +230,10 @@ export default function FinanceView({ data }) {
             <Bar dataKey="profit" fill="#10b981" />
           </BarChart>
         </GraphCard>
-
       </div>
 
-      {/* ✅ ADDED (NO REMOVAL) */}
+      {/* EXTRA GRAPHS */}
       <div className="grid md:grid-cols-2 gap-6">
-
         <GraphCard title="Profit & Loss Forecast">
           <BarChart data={pnlData}>
             <XAxis dataKey="year" />
@@ -163,12 +251,10 @@ export default function FinanceView({ data }) {
             <Bar dataKey="value" fill="#3b82f6" />
           </BarChart>
         </GraphCard>
-
       </div>
 
       {/* COST */}
       <div className="grid md:grid-cols-2 gap-6">
-
         <GraphCard title="Cost Structure">
           <BarChart data={costData}>
             <XAxis dataKey="name" />
@@ -191,48 +277,44 @@ export default function FinanceView({ data }) {
             <p className="text-gray-400">Click a bar</p>
           )}
         </div>
-
       </div>
 
-      {/* CARDS */}
+      {/* COLORED CARDS */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <InfoCard title="Pricing Strategy" content={sections.pricing} color="emerald" />
+        <InfoCard title="Cash Flow Forecast" content={sections.cashflow} color="blue" />
+        <InfoCard title="Funding Requirements" content={sections.funding} color="purple" />
+        <InfoCard title="ROI Estimation" content={sections.roi} color="orange" />
+      </div>
+
+      {/* RISKS + KEY INSIGHTS */}
       <div className="grid md:grid-cols-2 gap-6">
 
-        <div className="space-y-6">
-          <InfoCard title="Pricing Strategy" content={sections.pricing} />
-          <InfoCard title="Cash Flow Forecast" content={sections.cashflow} />
-          <InfoCard title="Funding Requirements" content={sections.funding} />
-          <InfoCard title="ROI Estimation" content={sections.roi} />
+        <div className="glass-card p-6">
+          <h2 className="text-red-400 mb-4">⚠ Financial Risks</h2>
+          {splitPoints(sections.risks).map((r, i) => (
+            <div key={i} className="p-3 bg-red-500/10 border border-red-400/20 rounded mb-2">
+              • {r}
+            </div>
+          ))}
         </div>
 
         <div className="glass-card p-6">
-          <h2 className="text-red-400 mb-3">⚠ Financial Risks</h2>
-          {splitPoints(sections.risks).map((r, i) => (
-            <div key={i} className="p-3 bg-red-500/10 rounded mb-2">
-              • {r}
+          <h2 className="text-emerald-400 mb-4">🎯 Key Insights</h2>
+          {points.slice(0, 6).map((p, i) => (
+            <div key={i} className="p-3 bg-emerald-500/10 border border-emerald-400/20 rounded mb-2">
+              • {p}
             </div>
           ))}
         </div>
 
       </div>
 
-      {/* KEEP */}
-      <div className="glass-card p-6">
-        <h2>📄 Financial Insights</h2>
-        <div className="whitespace-pre-wrap">{text}</div>
-      </div>
-
-      <div className="glass-card p-6">
-        <h2>🎯 Key Insights</h2>
-        {points.slice(0, 5).map((p, i) => (
-          <p key={i}>• {p}</p>
-        ))}
-      </div>
-
     </div>
   );
 }
 
-// 🔥 SMALL COMPONENTS
+// COMPONENTS (UNCHANGED)
 function Card({ label, value, color = "emerald" }) {
   return (
     <div className="glass-card p-5 text-center">
@@ -257,15 +339,24 @@ function GraphCard({ title, children, icon }) {
   );
 }
 
-function InfoCard({ title, content }) {
+function InfoCard({ title, content, color }) {
   const points =
     content?.split(/[-•]/).filter((c) => c.trim().length > 5) || [];
 
+  const styles = {
+    emerald: "bg-emerald-500/10 border-emerald-400",
+    blue: "bg-blue-500/10 border-blue-400",
+    purple: "bg-purple-500/10 border-purple-400",
+    orange: "bg-orange-500/10 border-orange-400",
+  };
+
   return (
-    <div className="glass-card p-5">
-      <h3 className="mb-2">{title}</h3>
+    <div className={`glass-card p-5 border-l-4 ${styles[color]}`}>
+      <h3 className="mb-3 text-lg font-semibold">{title}</h3>
       {points.map((p, i) => (
-        <p key={i}>• {p.trim()}</p>
+        <p key={i} className="text-gray-300 mb-1">
+          • {p.trim()}
+        </p>
       ))}
     </div>
   );

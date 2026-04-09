@@ -1,9 +1,11 @@
 import {
   Mic,
+  MicOff,
   Download,
   FileText,
 } from "lucide-react";
 
+import { useState } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import PptxGenJS from "pptxgenjs";
@@ -19,17 +21,75 @@ export default function PitchView({ data }) {
 
   const text = data?.pitch_deck || "";
 
-  const extract = (label, fallback) => {
-    const match = text.match(new RegExp(label + ":(.*?)(\\n[A-Z]|$)", "is"));
-    return match ? match[1].trim() : fallback;
+  // =========================
+  // 🔥 SMART PARSER
+  // =========================
+  const extractNumberedSections = () => {
+    const regex = /(\d+)\.\s([A-Za-z ]+):([\s\S]*?)(?=\n\d+\.|$)/g;
+
+    const sections = {};
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      const title = match[2].toLowerCase().trim();
+      const content = match[3].trim();
+      sections[title] = content;
+    }
+
+    return sections;
   };
 
-  const problem = extract("Problem Statement", "Problem not defined");
-  const solution = extract("Solution Pitch", "Solution not defined");
-  const market = extract("Market Opportunity", "Market opportunity");
-  const traction = extract("Traction", "Early traction stage");
-  const model = extract("Business Model", "Revenue strategy");
-  const ask = extract("Funding Ask", "$100,000");
+  const parsed = extractNumberedSections();
+
+  // =========================
+  // 🎯 MARKET STRUCTURE
+  // =========================
+  const marketSections = {
+    market: parsed["market opportunity"] || "",
+    segments: parsed["customer segments"] || "",
+    behavior: parsed["buying behavior"] || "",
+    trends: parsed["market trends"] || "",
+    competition: parsed["competitive landscape"] || "",
+    barriers: parsed["entry barriers"] || "",
+    risks: parsed["market risks"] || "",
+  };
+
+  // =========================
+  // 💰 DYNAMIC FUNDING ASK
+  // =========================
+  const extractFunding = () => {
+    const regex = /Funding Ask:([\s\S]*?)(?=\n[A-Z]|$)/i;
+    const match = text.match(regex);
+
+    if (!match) return "$100,000";
+
+    const moneyMatch = match[1].match(/\$[0-9,]+/);
+    return moneyMatch ? moneyMatch[0] : "$100,000";
+  };
+
+  const ask = extractFunding();
+
+  // =========================
+  // 🎤 SPEECH
+  // =========================
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const speakNarrative = () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.rate = 1;
+    speech.pitch = 1;
+
+    speech.onend = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(speech);
+    setIsSpeaking(true);
+  };
 
   // ================= PDF =================
   const downloadPDF = async () => {
@@ -61,7 +121,7 @@ export default function PitchView({ data }) {
         color: "10b981",
       });
 
-      slide.addText(content, {
+      slide.addText(content || "N/A", {
         x: 0.5,
         y: 1.5,
         fontSize: 18,
@@ -70,11 +130,13 @@ export default function PitchView({ data }) {
       });
     };
 
-    createSlide("🚨 Problem", problem);
-    createSlide("💡 Solution", solution);
-    createSlide("🌍 Market", market);
-    createSlide("📈 Traction", traction);
-    createSlide("💰 Business Model", model);
+    createSlide("🌍 Market", marketSections.market);
+    createSlide("👥 Customer Segments", marketSections.segments);
+    createSlide("🛒 Buying Behaviour", marketSections.behavior);
+    createSlide("📈 Market Trends", marketSections.trends);
+    createSlide("🏁 Competitive Landscape", marketSections.competition);
+    createSlide("🚧 Entry Barriers", marketSections.barriers);
+    createSlide("⚠ Market Risks", marketSections.risks);
     createSlide("🎯 Funding Ask", ask);
 
     pptx.writeFile({ fileName: "Startup_Pitch.pptx" });
@@ -114,14 +176,20 @@ export default function PitchView({ data }) {
       {/* CONTENT */}
       <div id="pitch-content" className="space-y-6">
 
-        <Grid items={[problem, solution, market]} />
-
+        {/* 🎨 COLORED MARKET GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card title="📈 Traction" content={traction} />
-          <Card title="💰 Business Model" content={model} />
+
+          <Card title="🌍 Market" content={marketSections.market} color="emerald" />
+          <Card title="👥 Customer Segments" content={marketSections.segments} color="blue" />
+          <Card title="🛒 Buying Behaviour" content={marketSections.behavior} color="purple" />
+          <Card title="📈 Market Trends" content={marketSections.trends} color="orange" />
+          <Card title="🏁 Competitive Landscape" content={marketSections.competition} color="emerald" />
+          <Card title="🚧 Entry Barriers" content={marketSections.barriers} color="blue" />
+          <Card title="⚠ Market Risks" content={marketSections.risks} color="red" />
+
         </div>
 
-        {/* 🎯 FUNDING ASK (HIGHLIGHT) */}
+        {/* 💰 FUNDING ASK */}
         <div className="glass-card p-8 text-center">
           <h2 className="text-xl font-semibold mb-4">🎯 Funding Ask</h2>
           <p className="text-5xl font-bold text-emerald-400">{ask}</p>
@@ -130,36 +198,46 @@ export default function PitchView({ data }) {
           </p>
         </div>
 
-        {/* FULL PITCH */}
-        <Card title="📄 Full Pitch Narrative" content={text} />
+        {/* 🎤 FULL PITCH WITH MIC */}
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">📄 Full Pitch Narrative</h2>
+
+            <button
+              onClick={speakNarrative}
+              className="flex items-center gap-2 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition"
+            >
+              {isSpeaking ? <MicOff size={16} /> : <Mic size={16} />}
+              {isSpeaking ? "Stop" : "Listen"}
+            </button>
+          </div>
+
+          <p className="text-gray-300 whitespace-pre-wrap">
+            {text}
+          </p>
+        </div>
 
       </div>
     </div>
   );
 }
 
-// 🔥 COMPONENTS
+// 🎨 CARD COMPONENT
+function Card({ title, content, color = "emerald" }) {
+  const styles = {
+    emerald: "bg-emerald-500/10 border-emerald-400",
+    blue: "bg-blue-500/10 border-blue-400",
+    purple: "bg-purple-500/10 border-purple-400",
+    orange: "bg-orange-500/10 border-orange-400",
+    red: "bg-red-500/10 border-red-400",
+  };
 
-function Card({ title, content }) {
   return (
-    <div className="glass-card p-6">
+    <div className={`glass-card p-6 border-l-4 ${styles[color]}`}>
       <h2 className="text-xl font-semibold mb-4">{title}</h2>
-      <p className="text-gray-300 whitespace-pre-wrap">{content}</p>
-    </div>
-  );
-}
-
-function Grid({ items }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {items.map((c, i) => (
-        <div key={i} className="glass-card p-6">
-          <h2 className="text-xl font-semibold mb-3">
-            {i === 0 ? "🚨 Problem" : i === 1 ? "💡 Solution" : "🌍 Market"}
-          </h2>
-          <p className="text-gray-300">{c}</p>
-        </div>
-      ))}
+      <p className="text-gray-300 whitespace-pre-wrap">
+        {content || "Not available"}
+      </p>
     </div>
   );
 }
