@@ -194,64 +194,63 @@ Includes analysis graphs:
 ##  Installation Guide
 
 ### 1. Clone Repository
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-startup-platform.git
+git clone https://github.com/sameeksha-dhakarwal/ai-startup-platform.git
 cd ai-startup-platform
 
-### 2. Terminal 1
-```bash
-ollama run mistral(slower but more efficient version)
-ollama run llama3
+### 2. Start AI Models (Terminal 1)
+ollama run mistral   # Slower but more efficient
+ollama run llama3    # Faster alternative
 
-### 3. Terminal 2
-```bash
+### 3. Start Backend Server (Terminal 2)
 cd "E:\Venture GenAI\Venturegenai"
 venv\Scripts\activate
 python -m uvicorn api:app --reload
 
-### 4. Terminal 3
-```bash
+### 4. Start Frontend (Terminal 3)
 cd venture-ui
+npm install
 npm run dev
----
-## 4. Access Application
+
+### 5. Access Application
 http://localhost:5173
 
 ---
 
 ## System Workflow
+
 User Input (Startup Idea)
-        ↓
+↓
 AI Agents Processing
-        ↓
+↓
 Structured Output
-        ↓
+↓
 Visualization Layer
-        ↓
+↓
 Insights & Recommendations
 
 ## Limitations
 AI depends on prompt quality
 API latency may affect speed
 Parsing depends on text consistency
-Financials are estimations
----
+Financial projections are estimations
 
-## Real-Time Data
+## Future Scope
+📡 Real-Time Data Integration
 Market APIs
 Economic indicators
-Advanced AI
+
+Advanced AI Capabilities
 Startup success prediction
 Risk scoring
 Investor matching
+
 Advanced Analytics
 Scenario simulations
 Real-time dashboards
 Sensitivity analysis
----
+
 
 ## Conclusion
-
 This platform represents a next-generation AI startup intelligence system that bridges:
 
 Raw ideas
