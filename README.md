@@ -262,3 +262,5 @@ It empowers founders to:
 ✔ Build faster
 ✔ Think smarter
 ✔ Pitch better
+
+Developed by Sameeksha Dhakarwal
