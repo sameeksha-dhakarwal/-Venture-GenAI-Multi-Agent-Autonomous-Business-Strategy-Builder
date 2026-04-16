@@ -263,4 +263,4 @@ It empowers founders to:
 ✔ Think smarter
 ✔ Pitch better
 
-Developed by Sameeksha Dhakarwal
+Developed by *Sameeksha Dhakarwal*
