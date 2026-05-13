@@ -1,0 +1,212 @@
+import { Mic, MicOff, FileText } from "lucide-react";
+import { useState } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+export default function PitchView({ data }) {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  if (!data) {
+    return (
+      <div className="text-gray-400 text-center mt-10">
+        Generate strategy first 🚀
+      </div>
+    );
+  }
+
+  // ─── Safely resolve pitch_structured regardless of nesting ───
+  // Support both: data.pitch_structured AND data itself being the structured object
+  const structured =
+    data?.pitch_structured && typeof data.pitch_structured === "object"
+      ? data.pitch_structured
+      : typeof data === "object"
+      ? data
+      : {};
+
+  const narrativeText =
+    typeof data?.pitch_deck === "string" ? data.pitch_deck.trim() : "";
+
+  // ─── Render any value type as a readable string ───
+  const renderContent = (val) => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string") return val.trim();
+    if (Array.isArray(val)) {
+      return val
+        .map((item) => {
+          if (typeof item === "object" && item !== null) {
+            const name = item.name || "";
+            const desc = item.description || "";
+            return name && desc ? `${name}: ${desc}` : name || desc || JSON.stringify(item);
+          }
+          return String(item);
+        })
+        .filter(Boolean)
+        .join("\n");
+    }
+    if (typeof val === "object") {
+      return Object.values(val)
+        .filter((v) => v !== null && v !== undefined && v !== "")
+        .map((v) => String(v))
+        .join(" ");
+    }
+    return String(val);
+  };
+
+  // ─── Resolve each card section ───
+  // Try both camelCase and snake_case keys to be safe
+  const get = (key1, key2) =>
+    renderContent(structured[key1] ?? structured[key2] ?? "");
+
+  const marketSections = {
+    market:      get("market",               "market"),
+    segments:    get("customer_segments",    "customerSegments"),
+    behavior:    get("buying_behavior",      "buyingBehavior"),
+    trends:      get("market_trends",        "marketTrends"),
+    competition: get("competitive_landscape","competitiveLandscape"),
+    barriers:    get("entry_barriers",       "entryBarriers"),
+  };
+
+  // ─── Resolve funding ask ───
+  const resolveFundingAsk = () => {
+    // 1. From structured data
+    const fromStructured = renderContent(structured?.funding_ask || structured?.fundingAsk);
+    if (fromStructured && fromStructured.trim()) return fromStructured.trim();
+
+    // 2. Scan the narrative
+    if (narrativeText) {
+      const regex =
+        /(?:Funding Ask|seeking|raise|ask(?:ing)?)[:\s]*(\$[\d,]+(?:\.\d+)?(?:\s?[KMBkmb](?:illion)?)?)/i;
+      const match = narrativeText.match(regex);
+      if (match) return match[1];
+    }
+
+    // 3. Hard fallback
+    return "$10,000,000";
+  };
+
+  const ask = resolveFundingAsk();
+
+  // ─── Text-to-speech ───
+  const speakNarrative = () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const speech = new SpeechSynthesisUtterance(narrativeText);
+    speech.onend = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(speech);
+    setIsSpeaking(true);
+  };
+
+  // ─── PDF export ───
+  const downloadPDF = async () => {
+    const element = document.getElementById("pitch-content");
+    if (!element) return;
+    const canvas = await html2canvas(element, { scale: 1.5 });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const width = pdf.internal.pageSize.getWidth();
+    const height = (canvas.height * width) / canvas.width;
+    pdf.addImage(imgData, "PNG", 0, 0, width, height);
+    pdf.save("Startup-Pitch-Deck.pdf");
+  };
+
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 animate-fade-in">
+      {/* HEADER */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-emerald-500/20 rounded-lg">
+            <Mic className="text-emerald-400" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Pitch Deck</h1>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={downloadPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition"
+          >
+            <FileText size={16} /> Export PDF
+          </button>
+        </div>
+      </div>
+
+      <p className="text-sm text-emerald-400 font-medium">● Dynamic Pitch Analysis Engine</p>
+
+      <div id="pitch-content" className="space-y-6">
+        {/* MARKET ANALYSIS CARDS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card title="🌍 Market Analysis"       content={marketSections.market}      color="emerald" />
+          <Card title="👥 Customer Segments"     content={marketSections.segments}    color="blue"    />
+          <Card title="🛒 Buying Behaviour"      content={marketSections.behavior}    color="purple"  />
+          <Card title="📈 Market Trends"         content={marketSections.trends}      color="orange"  />
+          <Card title="🏁 Competitive Landscape" content={marketSections.competition} color="emerald" />
+          <Card title="🚧 Entry Barriers"        content={marketSections.barriers}    color="blue"    />
+        </div>
+
+        {/* DYNAMIC FUNDING ASK */}
+        <div className="glass-card p-10 text-center border-t-2 border-emerald-500/30 bg-gradient-to-b from-emerald-500/5 to-transparent">
+          <h2 className="text-xl font-semibold mb-2 text-gray-300">Target Funding Requirement</h2>
+          <p className="text-6xl font-bold text-emerald-400 mb-4">{ask}</p>
+          <p className="max-w-2xl mx-auto text-gray-400">
+            This figure is dynamically calculated based on current market entry costs and the
+            operational scale required for this specific startup idea.
+          </p>
+        </div>
+
+        {/* PITCH NARRATIVE */}
+        <div className="glass-card p-8 border border-white/5">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white">Presentation Script</h2>
+              <p className="text-sm text-gray-400">A persuasive first-person narrative for investors</p>
+            </div>
+            <button
+              onClick={speakNarrative}
+              className={`flex items-center gap-2 px-5 py-2 rounded-full transition-all ${
+                isSpeaking
+                  ? "bg-red-500/20 text-red-400"
+                  : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+              }`}
+            >
+              {isSpeaking ? <MicOff size={18} /> : <Mic size={18} />}
+              <span className="font-semibold">{isSpeaking ? "Stop Pitch" : "Listen to Pitch"}</span>
+            </button>
+          </div>
+
+          <div className="max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+            {narrativeText ? (
+              <p className="text-gray-200 text-lg leading-relaxed whitespace-pre-wrap italic opacity-90">
+                "{narrativeText}"
+              </p>
+            ) : (
+              <p className="text-gray-500 italic">Your pitch speech is being drafted...</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Card component ───
+function Card({ title, content, color = "emerald" }) {
+  const styles = {
+    emerald: "bg-emerald-500/5 border-emerald-500/40",
+    blue:    "bg-blue-500/5 border-blue-500/40",
+    purple:  "bg-purple-500/5 border-purple-500/40",
+    orange:  "bg-orange-500/5 border-orange-500/40",
+  };
+
+  const hasContent = content && content.trim().length > 0;
+
+  return (
+    <div className={`glass-card p-6 border-l-4 ${styles[color]} flex flex-col h-full`}>
+      <h2 className="text-lg font-bold mb-3 text-white/90">{title}</h2>
+      <p className="text-gray-300 text-sm leading-relaxed flex-grow whitespace-pre-line">
+        {hasContent ? content : <span className="text-gray-500 italic">Generating analysis...</span>}
+      </p>
+    </div>
+  );
+}

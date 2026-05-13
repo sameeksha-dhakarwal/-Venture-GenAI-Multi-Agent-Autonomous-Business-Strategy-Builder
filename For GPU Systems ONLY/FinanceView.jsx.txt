@@ -1,0 +1,854 @@
+import { useState } from "react";
+import { DollarSign, TrendingUp, BarChart3 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from "recharts";
+
+export default function FinanceView({ data }) {
+  const [selectedCost, setSelectedCost] = useState(null);
+
+  if (!data) {
+    return (
+      <div className="text-gray-400 text-center mt-10">
+        Generate strategy first 🚀
+      </div>
+    );
+  }
+
+  const text =
+    data && data.financials ? String(data.financials) : "";
+
+  if (!text || text.length < 10 || text.startsWith("ERROR:")) {
+    return (
+      <div className="text-gray-400 text-center mt-10">
+        {text.startsWith("ERROR:")
+          ? text
+          : "No financial data available. Please generate a strategy first."}
+      </div>
+    );
+  }
+
+  // =========================
+  // SAFE HELPERS
+  // =========================
+
+  const safeStr = (val) =>
+    val !== null && val !== undefined ? String(val) : "";
+
+  /**
+   * Extract the raw text block under a section header.
+   * Stops at the next ALL-CAPS-starting header line.
+   */
+  const extractSection = (labelPattern) => {
+    try {
+      const regex = new RegExp(
+        labelPattern + ":([\\s\\S]*?)(?=\\n[A-Z][a-zA-Z &/]+:|$)",
+        "i"
+      );
+      const match = text.match(regex);
+      if (match && match[1]) return safeStr(match[1]);
+      const simple = new RegExp(labelPattern + ":([^\\n]*)", "i");
+      const sm = text.match(simple);
+      return sm && sm[1] ? safeStr(sm[1]) : "";
+    } catch (e) {
+      return "";
+    }
+  };
+
+  /**
+   * Return an array of bullet-point strings from a section.
+   */
+  const extractBullets = (labelPattern) => {
+    try {
+      const regex = new RegExp(
+        labelPattern + ":([\\s\\S]*?)(?=\\n[A-Z][a-zA-Z &/]+:|$)",
+        "i"
+      );
+      const match = text.match(regex);
+      if (!match || !match[1]) return [];
+      const content = safeStr(match[1]);
+      return content
+        .split("\n")
+        .map((line) => safeStr(line).replace(/^[\s\-•*]+/, "").trim())
+        .filter((line) => line && line.length > 4);
+    } catch (e) {
+      return [];
+    }
+  };
+
+  /**
+   * Extract the first dollar amount after a label keyword.
+   */
+  const extractMoney = (label, fallback) => {
+    try {
+      const patterns = [
+        new RegExp(label + "[:\\s]+\\$?([0-9][0-9,]*)", "i"),
+        new RegExp(label + ".*?\\$([0-9][0-9,]*)", "i"),
+      ];
+      for (const re of patterns) {
+        const match = text.match(re);
+        if (match && match[1]) {
+          const val = parseInt(safeStr(match[1]).replace(/,/g, ""), 10);
+          if (!isNaN(val) && val > 0) return val;
+        }
+      }
+    } catch (e) {}
+    return fallback;
+  };
+
+  const formatMoney = (num) => {
+    const n = Number(num);
+    if (num === null || num === undefined || isNaN(n)) return "N/A";
+    if (n >= 1000000) return "$" + (n / 1000000).toFixed(1) + "M";
+    if (n >= 1000) return "$" + (n / 1000).toFixed(0) + "K";
+    return "$" + n.toLocaleString();
+  };
+
+  const formatMoneyFull = (num) => {
+    const n = Number(num);
+    if (num === null || num === undefined || isNaN(n)) return "N/A";
+    return "$" + n.toLocaleString();
+  };
+
+  // =========================
+  // EXTRACT YEARLY REVENUE — from LLM text only
+  // =========================
+
+  const extractYearlyRevenue = () => {
+    try {
+      const section = extractSection("Revenue Projections");
+      const searchIn =
+        section && section.length > 5 ? section : text;
+      const found = {};
+      const re = /Year\s*(\d)\s*:\s*\$?([0-9][0-9,]*)/gi;
+      let m;
+      while ((m = re.exec(searchIn)) !== null) {
+        const yr = parseInt(m[1]);
+        const val = parseInt(safeStr(m[2]).replace(/,/g, ""), 10);
+        if (!found[yr] && !isNaN(val) && val > 0) found[yr] = val;
+      }
+      // Only return values actually found in LLM output
+      return [found[1] || null, found[2] || null, found[3] || null];
+    } catch (e) {
+      return [null, null, null];
+    }
+  };
+
+  // =========================
+  // UNIT ECONOMICS — from LLM text only
+  // =========================
+
+  const rawRev = extractMoney("Revenue per user", null);
+  const rawCAC = extractMoney("CAC", null);
+  const rawLTV = extractMoney("LTV", null);
+  const rawMargin = (() => {
+    try {
+      const m = text.match(/Margin[:\s]+([0-9]+)\s*%/i);
+      return m && m[1] ? parseInt(m[1]) : null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const unit = {
+    revenue: rawRev,
+    cac: rawCAC,
+    ltv: rawLTV || (rawRev ? rawRev * 4 : null),
+    margin: rawMargin,
+  };
+
+  const [rev1, rev2, rev3] = extractYearlyRevenue();
+
+  const revenueData = [
+    { year: "Year 1", revenue: rev1 },
+    { year: "Year 2", revenue: rev2 },
+    { year: "Year 3", revenue: rev3 },
+  ].filter((d) => d.revenue !== null);
+
+  // =========================
+  // P&L extraction — robust multi-pattern parser
+  // =========================
+
+  const extractPnL = (yearNum) => {
+    try {
+      // Pull the P&L section first, fall back to full text
+      const section = extractSection(
+        "Profit.*Loss Forecast|Profit & Loss"
+      );
+      const target = section && section.length > 5 ? section : text;
+
+      // Split into lines and find the one for this year
+      const lines = target.split("\n");
+      for (const line of lines) {
+        if (!new RegExp("Year\\s*" + yearNum + "\\b", "i").test(line)) continue;
+
+        const clean = line.replace(/,/g, "");
+
+        // Pattern 1: explicit negative  →  -$1,200,000  or  -1200000
+        const negMatch = clean.match(/-\$?([0-9]+)/);
+        if (negMatch) return -parseInt(negMatch[1], 10);
+
+        // Pattern 2: word "Loss" anywhere on the line  →  treat amount as negative
+        const lossWordMatch = clean.match(/loss/i);
+        const amountAfterLoss = clean.match(/\$?([0-9]+)/g);
+        if (lossWordMatch && amountAfterLoss) {
+          const nums = amountAfterLoss
+            .map((s) => parseInt(s.replace("$", ""), 10))
+            .filter((n) => !isNaN(n) && n > 0);
+          if (nums.length > 0) return -nums[0];
+        }
+
+        // Pattern 3: word "Profit" anywhere on the line  →  treat as positive
+        const profitWordMatch = clean.match(/profit/i);
+        if (profitWordMatch && amountAfterLoss) {
+          const nums = (clean.match(/\$?([0-9]+)/g) || [])
+            .map((s) => parseInt(s.replace("$", ""), 10))
+            .filter((n) => !isNaN(n) && n > 0);
+          if (nums.length > 0) return nums[0];
+        }
+
+        // Pattern 4: plain dollar amount on year line, no sign keyword
+        // If year 1 and no keyword, assume loss; year 2/3 assume profit
+        const plainAmount = clean.match(/\$?([0-9]{4,})/);
+        if (plainAmount) {
+          const val = parseInt(plainAmount[1], 10);
+          return yearNum === 1 ? -val : val;
+        }
+      }
+    } catch (e) {
+      console.error("P&L parse error:", e);
+    }
+    return null;
+  };
+
+  const pnl1 = extractPnL(1);
+  const pnl2 = extractPnL(2);
+  const pnl3 = extractPnL(3);
+
+  // Derive from revenue if P&L completely missing but revenue exists
+  const pnl1Final = pnl1 !== null ? pnl1 : (rev1 ? Math.round(-rev1 * 0.20) : null);
+  const pnl2Final = pnl2 !== null ? pnl2 : (rev2 ? Math.round(rev2 * 0.15) : null);
+  const pnl3Final = pnl3 !== null ? pnl3 : (rev3 ? Math.round(rev3 * 0.28) : null);
+
+  const pnlData = [
+    pnl1Final !== null ? { year: "Year 1", value: pnl1Final } : null,
+    pnl2Final !== null ? { year: "Year 2", value: pnl2Final } : null,
+    pnl3Final !== null ? { year: "Year 3", value: pnl3Final } : null,
+  ].filter(Boolean);
+
+  // =========================
+  // EXPENSE vs PROFIT — derived from revenue
+  // =========================
+
+  const profitData = revenueData.map((d, i) => {
+    const margins = [0.35, 0.40, 0.48];
+    const margin = margins[i] || 0.40;
+    return {
+      year: d.year,
+      expense: Math.round(d.revenue * (1 - margin)),
+      profit: Math.round(d.revenue * margin),
+    };
+  });
+
+  // Break-even uses revenue values
+  const breakevenData = revenueData.map((d, i) => ({
+    year: d.year,
+    value: Math.round(d.revenue * [0.78, 0.85, 0.95][i]),
+  }));
+
+  // =========================
+  // COST STRUCTURE — parse from LLM Cost Structure section
+  // =========================
+
+  const extractCostData = () => {
+    try {
+      const section = extractSection("Cost Structure");
+      if (!section || section.length < 10) return [];
+
+      const lines = section
+        .split("\n")
+        .map((l) => safeStr(l).replace(/^[\s\-•*]+/, "").trim())
+        .filter((l) => l.length > 4);
+
+      const costs = [];
+      for (const line of lines) {
+        // Match: "Label: $amount/year (desc)" or "Label ($amount/year)"
+        const nameMatch = line.match(/^([^:$\(]+)/);
+        const amountMatch = line.match(/\$([0-9][0-9,]*)/);
+        const descMatch = line.match(/\(([^)]+)\)/);
+
+        if (nameMatch && amountMatch) {
+          const name = nameMatch[1]
+            .replace(/^-\s*/, "")
+            .trim()
+            .split(" ")
+            .slice(0, 3)
+            .join(" "); // Keep label short for chart
+          const value = parseInt(
+            amountMatch[1].replace(/,/g, ""),
+            10
+          );
+          const desc = descMatch ? descMatch[1] : "";
+          if (name && !isNaN(value) && value > 0) {
+            costs.push({ name, value, desc });
+          }
+        }
+      }
+      return costs.slice(0, 6);
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const costData = extractCostData();
+
+  // =========================
+  // SECTION BULLETS
+  // =========================
+
+  const pricingBullets = extractBullets("Pricing Strategy");
+  const cashflowBullets = extractBullets("Cash Flow Forecast");
+  const fundingBullets = extractBullets("Funding Requirements");
+  const roiBullets = extractBullets("ROI Estimation");
+  const riskBullets = extractBullets("Financial Risks");
+  const costBullets = extractBullets("Cost Structure");
+  const pnlBullets = extractBullets(
+    "Profit.*Loss Forecast|Profit & Loss Forecast"
+  );
+  const breakevenBullets = extractBullets("Break.even Analysis");
+  const revBullets = extractBullets("Revenue Projections");
+  const insightBullets = extractBullets("Key Insights");
+
+  // =========================
+  // CUSTOM TOOLTIP
+  // =========================
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload || !payload.length) return null;
+    return (
+      <div
+        style={{
+          background: "#1f2937",
+          border: "1px solid #374151",
+          borderRadius: 8,
+          padding: "10px 14px",
+          fontSize: 13,
+        }}
+      >
+        <p style={{ color: "#9ca3af", marginBottom: 4 }}>{label}</p>
+        {payload.map((p, i) => (
+          <p key={i} style={{ color: p.color || "#10b981", margin: "2px 0" }}>
+            {p.name}: {formatMoney(p.value)}
+          </p>
+        ))}
+      </div>
+    );
+  };
+
+  const PnLBar = (props) => {
+    const { x, y, width, height, value } = props;
+    if (!width || height === undefined || height === null) return null;
+    const color = Number(value) >= 0 ? "#10b981" : "#ef4444";
+    const absH = Math.abs(Number(height));
+    const barY = Number(value) >= 0 ? y : y + Number(height);
+    return (
+      <rect x={x} y={barY} width={width} height={absH} fill={color} rx={3} />
+    );
+  };
+
+  // =========================
+  // RENDER
+  // =========================
+
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-8 pb-32">
+      <div className="flex items-center gap-3">
+        <DollarSign className="text-emerald-400" size={28} />
+        <h1 className="text-3xl font-bold">Financial Analysis</h1>
+      </div>
+
+      {/* UNIT ECONOMICS TOP CARDS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard
+          label="Revenue / User"
+          value={unit.revenue ? formatMoneyFull(unit.revenue) : "N/A"}
+          sub="per customer"
+        />
+        <MetricCard
+          label="CAC"
+          value={unit.cac ? formatMoneyFull(unit.cac) : "N/A"}
+          sub="acquisition cost"
+          color="red"
+        />
+        <MetricCard
+          label="LTV"
+          value={unit.ltv ? formatMoneyFull(unit.ltv) : "N/A"}
+          sub="lifetime value"
+        />
+        <MetricCard
+          label="Margin"
+          value={unit.margin !== null ? unit.margin + "%" : "N/A"}
+          sub="gross margin"
+          color={
+            unit.margin === null
+              ? "emerald"
+              : unit.margin >= 50
+              ? "emerald"
+              : unit.margin >= 25
+              ? "yellow"
+              : "red"
+          }
+        />
+      </div>
+
+      {/* REVENUE GROWTH + EXPENSE vs PROFIT */}
+      {revenueData.length > 0 && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <GraphCard title="Revenue Growth" icon={<TrendingUp size={18} />}>
+            <LineChart data={revenueData}>
+              <XAxis
+                dataKey="year"
+                tick={{ fill: "#9ca3af", fontSize: 12 }}
+              />
+              <YAxis
+                tickFormatter={formatMoney}
+                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                width={72}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Line
+                dataKey="revenue"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ fill: "#10b981", r: 5 }}
+                name="Revenue"
+              />
+            </LineChart>
+          </GraphCard>
+
+          <GraphCard
+            title="Expense vs Profit"
+            icon={<BarChart3 size={18} />}
+          >
+            <BarChart data={profitData} barCategoryGap="30%">
+              <XAxis
+                dataKey="year"
+                tick={{ fill: "#9ca3af", fontSize: 12 }}
+              />
+              <YAxis
+                tickFormatter={formatMoney}
+                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                width={72}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar
+                dataKey="expense"
+                fill="#ef4444"
+                name="Expense"
+                radius={[3, 3, 0, 0]}
+              />
+              <Bar
+                dataKey="profit"
+                fill="#10b981"
+                name="Profit"
+                radius={[3, 3, 0, 0]}
+              />
+            </BarChart>
+          </GraphCard>
+        </div>
+      )}
+
+      {/* P&L + BREAKEVEN */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <GraphCard title="Profit & Loss Forecast">
+          {pnlData.length > 0 ? (
+            <BarChart data={pnlData} barCategoryGap="35%">
+              <XAxis dataKey="year" tick={{ fill: "#9ca3af", fontSize: 12 }} />
+              <YAxis tickFormatter={formatMoney} tick={{ fill: "#9ca3af", fontSize: 11 }} width={72} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || !payload.length) return null;
+                  const val = Number(payload[0].value);
+                  return (
+                    <div style={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+                      <p style={{ color: "#9ca3af", marginBottom: 4 }}>{label}</p>
+                      <p style={{ color: val < 0 ? "#ef4444" : "#10b981", margin: "2px 0" }}>
+                        {val < 0 ? "Loss" : "Profit"}: {formatMoney(Math.abs(val))}
+                      </p>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="value" shape={<PnLBar />} name="P&L" />
+            </BarChart>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500 text-sm italic">
+              P&L data not found in LLM output
+            </div>
+          )}
+        </GraphCard>
+
+        <GraphCard title="Break-even Analysis">
+          {breakevenData.length > 0 ? (
+            <BarChart data={breakevenData} barCategoryGap="35%">
+              <XAxis
+                dataKey="year"
+                tick={{ fill: "#9ca3af", fontSize: 12 }}
+              />
+              <YAxis
+                tickFormatter={formatMoney}
+                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                width={72}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar
+                dataKey="value"
+                fill="#3b82f6"
+                name="Target Revenue"
+                radius={[3, 3, 0, 0]}
+              />
+            </BarChart>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+              Generating break-even data...
+            </div>
+          )}
+        </GraphCard>
+      </div>
+
+      {/* COST STRUCTURE */}
+      {costData.length > 0 && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <GraphCard title="Cost Structure">
+            <BarChart data={costData} layout="vertical" barCategoryGap="20%">
+              <XAxis
+                type="number"
+                tickFormatter={formatMoney}
+                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                width={72}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={{ fill: "#9ca3af", fontSize: 12 }}
+                width={96}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar
+                dataKey="value"
+                fill="#10b981"
+                name="Cost"
+                radius={[0, 3, 3, 0]}
+                onClick={(d) => setSelectedCost(d)}
+                cursor="pointer"
+              />
+            </BarChart>
+          </GraphCard>
+
+          <div
+            className="glass-card p-6 flex flex-col justify-center"
+            style={{ minHeight: 300 }}
+          >
+            {selectedCost ? (
+              <div className="text-center">
+                <p className="text-gray-400 text-xs uppercase tracking-widest mb-2">
+                  {selectedCost.name}
+                </p>
+                <p className="text-4xl font-bold text-emerald-400 mb-2">
+                  {formatMoneyFull(selectedCost.value)}
+                </p>
+                <p className="text-gray-300 mb-3">{selectedCost.desc}</p>
+                {rev1 && (
+                  <p className="text-gray-500 text-sm">
+                    {((selectedCost.value / rev1) * 100).toFixed(1)}% of
+                    Year 1 Revenue
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-500 text-center mb-4">
+                  👈 Click a cost bar for details
+                </p>
+                <div className="space-y-2">
+                  {costBullets.slice(0, 5).map((b, i) => (
+                    <p key={i} className="text-gray-400 text-sm">
+                      • {b}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* REVENUE + P&L TEXT */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <DetailCard
+          title="📈 Revenue Projections"
+          bullets={revBullets}
+          color="emerald"
+        />
+        <DetailCard
+          title="📊 Profit & Loss Forecast"
+          bullets={
+            pnlBullets.length > 0
+              ? pnlBullets
+              : [
+                  pnl1Final !== null ? `Year 1: ${pnl1Final < 0 ? "Loss" : "Profit"} of ${formatMoney(Math.abs(pnl1Final))}` : null,
+                  pnl2Final !== null ? `Year 2: ${pnl2Final < 0 ? "Loss" : "Profit"} of ${formatMoney(Math.abs(pnl2Final))}` : null,
+                  pnl3Final !== null ? `Year 3: ${pnl3Final < 0 ? "Loss" : "Profit"} of ${formatMoney(Math.abs(pnl3Final))}` : null,
+                ].filter(Boolean)
+          }
+          color="blue"
+        />
+      </div>
+
+      {/* PRICING + CASHFLOW */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <DetailCard
+          title="💰 Pricing Strategy"
+          bullets={pricingBullets}
+          color="emerald"
+        />
+        <DetailCard
+          title="🌊 Cash Flow Forecast"
+          bullets={cashflowBullets}
+          color="blue"
+        />
+      </div>
+
+      {/* FUNDING + ROI */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <DetailCard
+          title="🏦 Funding Requirements"
+          bullets={fundingBullets}
+          color="purple"
+        />
+        <DetailCard
+          title="📉 ROI Estimation"
+          bullets={roiBullets}
+          color="orange"
+        />
+      </div>
+
+      {/* RISKS + KEY INSIGHTS (matches target screenshots) */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h2 className="text-red-400 font-semibold text-lg mb-4">
+            ⚠️ Financial Risks
+          </h2>
+          <div className="space-y-2">
+            {riskBullets.length > 0 ? (
+              riskBullets.map((r, i) => (
+                <div
+                  key={i}
+                  className="p-3 bg-red-500/10 border border-red-400/20 rounded-lg text-gray-300 text-sm"
+                >
+                  • {r}
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-sm italic">
+                Generating risk analysis...
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* KEY INSIGHTS panel (as in target screenshots) */}
+        <div className="glass-card p-6">
+          <h2 className="text-emerald-400 font-semibold text-lg mb-4">
+            🎯 Key Insights
+          </h2>
+          <div className="space-y-2">
+            {insightBullets.length > 0 ? (
+              insightBullets.map((insight, i) => (
+                <div
+                  key={i}
+                  className="p-3 bg-emerald-500/10 border border-emerald-400/20 rounded-lg text-gray-300 text-sm"
+                >
+                  • {insight}
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-sm italic">
+                Generating insights...
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* UNIT ECONOMICS DETAIL */}
+      <div className="glass-card p-6">
+        <h2 className="text-emerald-400 font-semibold text-lg mb-4">
+          🎯 Unit Economics Detail
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            {
+              label: "Revenue / User",
+              val: unit.revenue ? formatMoneyFull(unit.revenue) : "N/A",
+              desc: "Avg revenue per customer",
+            },
+            {
+              label: "CAC",
+              val: unit.cac ? formatMoneyFull(unit.cac) : "N/A",
+              desc: "Cost to acquire 1 customer",
+            },
+            {
+              label: "LTV",
+              val: unit.ltv ? formatMoneyFull(unit.ltv) : "N/A",
+              desc: "Lifetime customer value",
+            },
+            {
+              label: "LTV:CAC Ratio",
+              val:
+                unit.ltv &&
+                unit.cac &&
+                !isNaN(Number(unit.ltv)) &&
+                !isNaN(Number(unit.cac))
+                  ? (Number(unit.ltv) / Number(unit.cac)).toFixed(1) + "x"
+                  : "N/A",
+              desc: "Efficiency metric (>3x = healthy)",
+            },
+          ].map((item, i) => (
+            <div
+              key={i}
+              className="p-4 bg-emerald-500/10 border border-emerald-400/20 rounded-lg text-center"
+            >
+              <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">
+                {item.label}
+              </p>
+              <p className="text-emerald-400 font-bold text-xl">{item.val}</p>
+              <p className="text-gray-500 text-xs mt-1">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* BREAK-EVEN TEXT + REVENUE SUMMARY */}
+      <div className="glass-card p-6">
+        <h2 className="text-blue-400 font-semibold text-lg mb-4">
+          📐 Break-even Analysis
+        </h2>
+        {breakevenBullets.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {breakevenBullets.map((b, i) => (
+              <div
+                key={i}
+                className="p-3 bg-blue-500/10 border border-blue-400/20 rounded-lg text-gray-300 text-sm"
+              >
+                • {b}
+              </div>
+            ))}
+          </div>
+        )}
+        {revenueData.length > 0 && (
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            {revenueData.map((r, i) => (
+              <div
+                key={i}
+                className="text-center p-3 bg-blue-500/10 border border-blue-400/20 rounded-lg"
+              >
+                <p className="text-gray-500 text-xs">{r.year}</p>
+                <p className="text-blue-400 font-bold text-sm">
+                  {formatMoney(r.revenue)}
+                </p>
+                <p className="text-gray-600 text-xs">Revenue</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =====================
+// SUB-COMPONENTS
+// =====================
+
+function MetricCard({ label, value, sub, color }) {
+  const c = color || "emerald";
+  const colorMap = {
+    emerald: "text-emerald-400",
+    red: "text-red-400",
+    yellow: "text-yellow-400",
+    blue: "text-blue-400",
+  };
+  return (
+    <div className="glass-card p-5 text-center">
+      <p className="text-gray-400 text-sm mb-1">{label}</p>
+      <p className={"text-2xl font-bold " + (colorMap[c] || "text-emerald-400")}>
+        {value}
+      </p>
+      {sub && <p className="text-gray-600 text-xs mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+function GraphCard({ title, children, icon }) {
+  return (
+    <div className="glass-card p-6">
+      <h2 className="flex items-center gap-2 text-gray-200 font-semibold mb-4 text-base">
+        {icon} {title}
+      </h2>
+      <ResponsiveContainer width="100%" height={260}>
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DetailCard({ title, bullets, color }) {
+  const styles = {
+    emerald: {
+      border: "border-emerald-400",
+      bg: "bg-emerald-500/5",
+      text: "text-emerald-400",
+    },
+    blue: {
+      border: "border-blue-400",
+      bg: "bg-blue-500/5",
+      text: "text-blue-400",
+    },
+    purple: {
+      border: "border-purple-400",
+      bg: "bg-purple-500/5",
+      text: "text-purple-400",
+    },
+    orange: {
+      border: "border-orange-400",
+      bg: "bg-orange-500/5",
+      text: "text-orange-400",
+    },
+  };
+  const s = styles[color] || styles.emerald;
+  const items = Array.isArray(bullets) ? bullets : [];
+  return (
+    <div className={"glass-card p-5 border-l-4 " + s.border + " " + s.bg}>
+      <h3 className={"mb-3 text-base font-semibold " + s.text}>{title}</h3>
+      {items.length > 0 ? (
+        <ul className="space-y-2">
+          {items.map((b, i) => (
+            <li key={i} className="text-gray-300 text-sm leading-relaxed">
+              • {b}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-gray-500 text-sm italic">Generating data...</p>
+      )}
+    </div>
+  );
+}

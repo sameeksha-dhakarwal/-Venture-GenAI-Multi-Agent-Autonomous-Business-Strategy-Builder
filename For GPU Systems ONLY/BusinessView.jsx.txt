@@ -1,0 +1,341 @@
+import React, { useState } from "react";
+import { Brain } from "lucide-react";
+
+function BusinessView({ data }) {
+  const [showDebug, setShowDebug] = useState(false);
+
+  if (!data) {
+    return (
+      <div className="text-gray-400 text-center mt-10">
+        Generate strategy first 🚀
+      </div>
+    );
+  }
+
+  const text = data?.business_model || "";
+
+  // ─── DEBUG: show raw text to diagnose parser issues ───────────────────────
+  if (!text || text.trim().length === 0) {
+    return (
+      <div className="text-red-400 text-center mt-10 p-6">
+        <p className="text-xl font-bold mb-2">❌ business_model is empty</p>
+        <p className="text-sm text-gray-400">Check your backend terminal for LLM errors.</p>
+        <pre className="mt-4 text-xs text-left bg-white/5 p-4 rounded overflow-auto max-h-64">
+          {JSON.stringify(data, null, 2)}
+        </pre>
+      </div>
+    );
+  }
+
+  // ─── BULLETPROOF SECTION PARSER ───────────────────────────────────────────
+  // Handles ALL Llama 3 output styles:
+  //   Style A: "Header:\nContent on next line"
+  //   Style B: "Header: Content on same line"
+  //   Style C: "**Header:**\nContent"  (bold markdown)
+  //   Style D: "### Header\nContent"   (heading markdown)
+  const parseSections = (raw) => {
+    const map = {};
+
+    // Strip bold markdown (**text**) and heading markdown (### text)
+    const cleaned = raw
+      .replace(/\*\*([^*]+)\*\*/g, "$1")   // **bold** → bold
+      .replace(/^#{1,4}\s+/gm, "");         // ### heading → plain
+
+    const lines = cleaned.split("\n");
+    let currentKey = null;
+    let currentLines = [];
+
+    const flush = () => {
+      if (currentKey) {
+        map[currentKey] = currentLines.join("\n").trim();
+      }
+    };
+
+    // Known section keys to match (lowercase, no punctuation)
+    const KNOWN_HEADERS = [
+      "business idea summary",
+      "value proposition",
+      "problem statement",
+      "solution overview",
+      "business model",
+      "revenue streams",
+      "pricing strategy",
+      "key activities",
+      "key resources",
+      "unique selling proposition (usp)",
+      "unique selling proposition",
+      "usp",
+      "swot analysis",
+      "strengths",
+      "weaknesses",
+      "opportunities",
+      "threats",
+    ];
+
+    const matchHeader = (line) => {
+      const trimmed = line.trim();
+      // Must not start with bullet or number
+      if (/^[-•*\d]/.test(trimmed)) return null;
+
+      // Strip trailing colon
+      const noColon = trimmed.replace(/:$/, "").trim().toLowerCase();
+
+      // Direct known header match
+      if (KNOWN_HEADERS.includes(noColon)) return noColon;
+
+      // Match "Header: inline content" — return header key only
+      const colonIdx = trimmed.indexOf(":");
+      if (colonIdx > 0 && colonIdx < 60) {
+        const possibleKey = trimmed.slice(0, colonIdx).trim().toLowerCase();
+        if (KNOWN_HEADERS.includes(possibleKey)) return possibleKey;
+      }
+
+      return null;
+    };
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const headerKey = matchHeader(trimmed);
+
+      if (headerKey) {
+        flush();
+        currentKey = headerKey;
+        currentLines = [];
+
+        // If there's inline content after the colon, add it
+        const colonIdx = trimmed.indexOf(":");
+        if (colonIdx > 0 && colonIdx < trimmed.length - 1) {
+          const inline = trimmed.slice(colonIdx + 1).trim();
+          if (inline.length > 0) currentLines.push(inline);
+        }
+      } else if (currentKey !== null) {
+        currentLines.push(line);
+      }
+    }
+    flush();
+
+    return map;
+  };
+
+  const sections = parseSections(text);
+
+  // Lookup raw section content
+  const getRaw = (...keys) => {
+    for (const key of keys) {
+      const val = sections[key.toLowerCase()];
+      if (val && val.trim().length > 3) return val.trim();
+    }
+    return "";
+  };
+
+  // Plain paragraph text
+  const getText = (fallback, ...keys) => {
+    const raw = getRaw(...keys);
+    if (!raw) return fallback;
+    return raw
+      .split("\n")
+      .map((l) =>
+        l.trim()
+          .replace(/^[-•*]\s*\d*[.)]\s*/, "")
+          .replace(/^\d+[.)]\s*/, "")
+          .replace(/^\[|\]$/g, "")
+          .trim()
+      )
+      .filter((l) => l.length > 2)
+      .join(" ")
+      .trim();
+  };
+
+  // Bullet list items
+  const getList = (fallback, ...keys) => {
+    const raw = getRaw(...keys);
+    if (!raw) return fallback;
+    const items = raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => /^[-•*]\s*\d*[.)]\s*|^[-•*]\s+|^\d+[.)]\s/.test(l))
+      .map((l) =>
+        l
+          .replace(/^[-•*]\s*\d*[.)]\s*/, "")
+          .replace(/^[-•*]\s+/, "")
+          .replace(/^\d+[.)]\s*/, "")
+          .replace(/^\[|\]$/g, "")
+          .trim()
+      )
+      .filter((l) => l.length > 4);
+    return items.length > 0 ? items : fallback;
+  };
+
+  // ─── DATA ─────────────────────────────────────────────────────────────────
+  const summary       = getText("", "business idea summary");
+  const value         = getText("", "value proposition");
+  const problem       = getText("", "problem statement");
+  const solution      = getText("", "solution overview");
+  const businessModel = getText("", "business model");
+  const pricing       = getText("", "pricing strategy");
+  const usp           = getText("", "unique selling proposition (usp)", "unique selling proposition", "usp");
+
+  const revenue       = getList([], "revenue streams");
+  const activities    = getList([], "key activities");
+  const resources     = getList([], "key resources");
+  const strengths     = getList([], "strengths");
+  const weaknesses    = getList([], "weaknesses");
+  const opportunities = getList([], "opportunities");
+  const threats       = getList([], "threats");
+
+  const sectionCount = Object.keys(sections).length;
+
+  // ─── RENDER ───────────────────────────────────────────────────────────────
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 animate-fade-in">
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Brain className="text-emerald-400" />
+          <h1 className="text-3xl font-bold">Business Analysis</h1>
+        </div>
+        {/* Debug toggle — remove once working */}
+        <button
+          onClick={() => setShowDebug(!showDebug)}
+          className="text-xs text-gray-500 border border-white/10 px-2 py-1 rounded hover:text-white"
+        >
+          {showDebug ? "Hide" : "Debug"} ({sectionCount} sections parsed)
+        </button>
+      </div>
+
+      <p className="text-sm text-emerald-400">● Live Business Strategy Engine</p>
+
+      {/* DEBUG PANEL */}
+      {showDebug && (
+        <div className="bg-black/40 border border-yellow-400/30 rounded-xl p-4 text-xs text-yellow-300 space-y-2">
+          <p className="font-bold text-yellow-400">🔍 Debug — Parsed Sections ({sectionCount}):</p>
+          <p className="text-gray-400">Sections found: {Object.keys(sections).join(" | ")}</p>
+          <p className="font-bold mt-2 text-yellow-400">Raw business_model (first 800 chars):</p>
+          <pre className="text-gray-300 whitespace-pre-wrap break-all overflow-auto max-h-64">
+            {text.slice(0, 800)}
+          </pre>
+        </div>
+      )}
+
+      {/* SUMMARY + VALUE */}
+      <div className="space-y-4">
+        <CompactCard title="📌 Business Idea Summary">
+          <p>{summary || <span className="text-yellow-400 text-xs">⚠ Not parsed — click Debug</span>}</p>
+        </CompactCard>
+        <CompactCard title="💎 Value Proposition">
+          <p>{value || <span className="text-yellow-400 text-xs">⚠ Not parsed — click Debug</span>}</p>
+        </CompactCard>
+      </div>
+
+      {/* PROBLEM + SOLUTION */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card title="🚨 Problem">
+          <p>{problem || <span className="text-yellow-400 text-xs">⚠ Not parsed</span>}</p>
+        </Card>
+        <Card title="💡 Solution">
+          <p>{solution || <span className="text-yellow-400 text-xs">⚠ Not parsed</span>}</p>
+        </Card>
+      </div>
+
+      {/* BUSINESS MODEL + USP + PRICING | REVENUE */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div className="space-y-4">
+          <CompactCard title="🏗️ Business Model">
+            <p>{businessModel || <span className="text-yellow-400 text-xs">⚠ Not parsed</span>}</p>
+          </CompactCard>
+          <CompactCard title="🎯 Unique Selling Proposition">
+            <p>{usp || <span className="text-yellow-400 text-xs">⚠ Not parsed</span>}</p>
+          </CompactCard>
+          <CompactCard title="💰 Pricing Strategy">
+            <p>{pricing || <span className="text-yellow-400 text-xs">⚠ Not parsed</span>}</p>
+          </CompactCard>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold">📊 Revenue Streams</h2>
+          {revenue.length > 0 ? revenue.map((r, i) => (
+            <div key={i}
+              className="p-4 rounded-xl bg-white/5 border border-white/10
+                transition duration-300 hover:scale-[1.03] hover:border-emerald-400/30
+                animate-fade-in-up"
+              style={{ animationDelay: `${i * 0.1}s` }}
+            >• {r}</div>
+          )) : (
+            <div className="p-4 rounded-xl bg-white/5 border border-yellow-400/20 text-yellow-400 text-xs">
+              ⚠ Revenue Streams not parsed — click Debug above
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ACTIVITIES + RESOURCES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card title="⚙️ Key Activities">
+          <ul className="space-y-2">
+            {activities.length > 0
+              ? activities.map((a, i) => <li key={i}>• {a}</li>)
+              : <li className="text-yellow-400 text-xs">⚠ Not parsed</li>}
+          </ul>
+        </Card>
+        <Card title="🧩 Key Resources">
+          <ul className="space-y-2">
+            {resources.length > 0
+              ? resources.map((r, i) => <li key={i}>• {r}</li>)
+              : <li className="text-yellow-400 text-xs">⚠ Not parsed</li>}
+          </ul>
+        </Card>
+      </div>
+
+      {/* SWOT */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">📊 SWOT Analysis</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SWOT title="Strengths"     items={strengths}      color="emerald" />
+          <SWOT title="Weaknesses"    items={weaknesses}     color="red"     />
+          <SWOT title="Opportunities" items={opportunities}  color="blue"    />
+          <SWOT title="Threats"       items={threats}        color="yellow"  />
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function Card({ title, children }) {
+  return (
+    <div className="glass-card p-6 transition duration-300 hover:scale-[1.02] hover:border-emerald-400/30">
+      <h2 className="text-xl font-semibold mb-3">{title}</h2>
+      <div className="text-gray-300">{children}</div>
+    </div>
+  );
+}
+
+function CompactCard({ title, children }) {
+  return (
+    <div className="glass-card p-4 transition duration-300 hover:scale-[1.02] hover:border-emerald-400/30">
+      <h2 className="text-lg font-semibold mb-2">{title}</h2>
+      <div className="text-gray-300 text-sm leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+function SWOT({ title, items, color }) {
+  const colorMap = {
+    emerald: "text-emerald-400",
+    red:     "text-red-400",
+    blue:    "text-blue-400",
+    yellow:  "text-yellow-400",
+  };
+  return (
+    <div className="p-4 bg-white/5 rounded-lg border border-white/10 transition hover:scale-[1.02]">
+      <h3 className={`font-semibold ${colorMap[color]} mb-2`}>{title}</h3>
+      <ul className="text-gray-300 space-y-1">
+        {items.length > 0
+          ? items.slice(0, 3).map((item, i) => <li key={i}>• {item}</li>)
+          : <li className="text-yellow-400 text-xs">⚠ Not parsed</li>}
+      </ul>
+    </div>
+  );
+}
+
+export default BusinessView;

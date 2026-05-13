@@ -1,0 +1,363 @@
+import { Globe } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from "recharts";
+
+// ─── PARSING HELPERS ────────────────────────────────────────────────────────
+
+/** Extract a single-line tag: "TAGNAME:value" → "value" */
+function getTag(text, tag) {
+  const m = text.match(new RegExp(tag + ":([^\n]+)"));
+  return m ? m[1].trim() : "";
+}
+
+/** Parse "||"-joined bullet tag into array */
+function getBulletTag(text, tag) {
+  const raw = getTag(text, tag);
+  if (!raw) return [];
+  return raw
+    .split("||")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 4);
+}
+
+/**
+ * Split-based section extractor — immune to llama3 formatting inconsistencies.
+ *
+ * Builds a map of { "SECTION NAME" -> "body text" } by splitting the full text
+ * on lines that look like section headers (Title Case or ALL CAPS followed by colon).
+ * Then does a fuzzy keyword lookup so minor LLM header variations still match.
+ *
+ * This replaces the old lookahead regex which broke when llama3 changed its
+ * newline style between ideas.
+ */
+function buildSectionMap(text) {
+  const map = {};
+  // Match lines that are section headers: start of line, mixed/upper case words, colon
+  // Covers: "Market Trends:", "MARKET TRENDS:", "Problem Solution Fit:", etc.
+  const headerRe = /^([A-Z][A-Za-z /()–-]{2,60}):\s*$/gm;
+
+  const headers = [];
+  let match;
+  while ((match = headerRe.exec(text)) !== null) {
+    headers.push({ title: match[1].trim(), index: match.index, end: match.index + match[0].length });
+  }
+
+  for (let i = 0; i < headers.length; i++) {
+    const start = headers[i].end;
+    const end   = i + 1 < headers.length ? headers[i + 1].index : text.length;
+    const body  = text.slice(start, end).trim();
+    // Store under uppercase key for case-insensitive lookup
+    map[headers[i].title.toUpperCase()] = body;
+  }
+
+  return map;
+}
+
+/**
+ * Fuzzy section lookup — finds the first key that contains all words of the keyword.
+ * e.g. "Problem Solution Fit" matches "PROBLEM SOLUTION FIT" and "PROBLEM–SOLUTION FIT"
+ */
+function getSection(map, keyword) {
+  const words = keyword.toUpperCase().replace(/[–-]/g, " ").split(/\s+/).filter(Boolean);
+  const key = Object.keys(map).find((k) =>
+    words.every((w) => k.replace(/[–-]/g, " ").includes(w))
+  );
+  return key ? map[key] : "";
+}
+
+/** Convert a text block to an array of clean bullet strings */
+function toBullets(block) {
+  if (!block) return [];
+  return block
+    .split("\n")
+    .map((l) => l.replace(/^[\s\-•*\d.]+/, "").trim())
+    .filter((l) => l.length > 5);
+}
+
+/**
+ * Multi-strategy bullet extractor for the 3 top cards.
+ * Strategy 1: dedicated tag  (PERSONA_BULLETS etc.)
+ * Strategy 2: dedicated section  ("Target Persona Bullets")
+ * Strategy 3: general section fallback
+ */
+function resolveTopCardBullets(text, sectionMap, tagName, sectionKeyword, fallbackKeyword) {
+  // Strategy 1 — tag
+  const fromTag = getBulletTag(text, tagName);
+  if (fromTag.length > 0) return fromTag;
+
+  // Strategy 2 — named section
+  const fromSection = toBullets(getSection(sectionMap, sectionKeyword));
+  if (fromSection.length > 0) return fromSection;
+
+  // Strategy 3 — fallback section
+  if (fallbackKeyword) {
+    const fromFallback = toBullets(getSection(sectionMap, fallbackKeyword));
+    if (fromFallback.length > 0) return fromFallback;
+  }
+
+  return [];
+}
+
+// ─── SUB-COMPONENTS ─────────────────────────────────────────────────────────
+
+function Card({ title, children }) {
+  return (
+    <div className="glass-card p-6">
+      <h2 className="text-lg font-semibold mb-4">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function BulletList({ items, color = "emerald" }) {
+  if (!items || items.length === 0)
+    return <p className="text-gray-500 text-sm italic">No data found.</p>;
+  return (
+    <ul className="space-y-2">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+          <span className={`mt-1.5 w-2 h-2 rounded-full bg-${color}-400 flex-shrink-0`} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Box({ title, text, color }) {
+  if (!text) return null;
+  return (
+    <div className={`bg-${color}-500/10 border border-${color}-500/20 p-3 rounded-lg`}>
+      <p className={`text-${color}-400 font-semibold text-sm`}>{title}</p>
+      <p className="text-sm text-gray-300 mt-1">{text}</p>
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
+
+export default function MarketView({ data }) {
+  if (!data) {
+    return (
+      <div className="text-gray-400 text-center mt-10">
+        Generate strategy first 🚀
+      </div>
+    );
+  }
+
+  const text = typeof data?.market === "string" ? data.market : "";
+
+  if (!text || text.startsWith("ERROR:")) {
+    return (
+      <div className="text-red-400 text-center mt-10 px-8">
+        {text.startsWith("ERROR:")
+          ? text
+          : "No market data available. Please generate a strategy first."}
+      </div>
+    );
+  }
+
+  // ── BUILD SECTION MAP ONCE ───────────────────────────────────────────────
+  const sectionMap = buildSectionMap(text);
+
+  // ── SCALAR TAGS ──────────────────────────────────────────────────────────
+  const cagr     = parseFloat(getTag(text, "CAGR_VALUE") || "15");
+  const trendRaw = getTag(text, "TREND_POINTS");
+  const demandSc = parseInt(getTag(text, "DEMAND_SCORE")  || "75");
+  const growthSc = parseInt(getTag(text, "GROWTH_SCORE")  || "70");
+  const compSc   = parseInt(getTag(text, "COMP_SCORE")    || "55");
+  const profitSc = parseInt(getTag(text, "PROFIT_SCORE")  || "70");
+  const scaleSc  = parseInt(getTag(text, "SCALE_SCORE")   || "75");
+  const tamRaw   = getTag(text, "TAM_RAW");
+  const samRaw   = getTag(text, "SAM_RAW");
+  const somRaw   = getTag(text, "SOM_RAW");
+
+  // ── TOP 3 CARD BULLETS — multi-strategy ──────────────────────────────────
+  const personaBullets = resolveTopCardBullets(
+    text, sectionMap,
+    "PERSONA_BULLETS",
+    "Target Persona Bullets",
+    "Customer Personas"
+  );
+  const painBullets = resolveTopCardBullets(
+    text, sectionMap,
+    "PAIN_BULLETS",
+    "Pain Points Bullets",
+    "Market Risks"
+  );
+  const behaviorBullets = resolveTopCardBullets(
+    text, sectionMap,
+    "BEHAVIOR_BULLETS",
+    "Behavior Bullets",
+    "Buying Behavior"
+  );
+
+  // ── CHART DATA ───────────────────────────────────────────────────────────
+  const trendPoints = trendRaw
+    ? trendRaw
+        .split(",")
+        .map((v, i) => ({ year: `Year ${i + 1}`, value: parseFloat(v) || 0 }))
+    : [
+        { year: "Year 1", value: cagr },
+        { year: "Year 2", value: +(cagr * 1.4).toFixed(1) },
+        { year: "Year 3", value: +(cagr * 1.9).toFixed(1) },
+        { year: "Year 4", value: +(cagr * 2.5).toFixed(1) },
+      ];
+
+  const marketMetrics = [
+    { name: "Demand",        value: demandSc },
+    { name: "Growth",        value: growthSc },
+    { name: "Competition",   value: compSc   },
+    { name: "Profitability", value: profitSc },
+    { name: "Scalability",   value: scaleSc  },
+  ];
+
+  // ── SECTION CONTENT ──────────────────────────────────────────────────────
+  const growthRateText = getSection(sectionMap, "Market Growth Rate");
+  const fitText =
+    getSection(sectionMap, "Problem Solution Fit") ||
+    getSection(sectionMap, "Problem-Solution Fit");
+
+  const segmentLines  = toBullets(getSection(sectionMap, "Customer Segments"));
+  const personaLines  = toBullets(getSection(sectionMap, "Customer Personas"));
+  const demandLines   = toBullets(getSection(sectionMap, "Demand Trends"));
+  const behaviorLines = toBullets(getSection(sectionMap, "Buying Behavior"));
+  const trendLines    = toBullets(getSection(sectionMap, "Market Trends"));
+  const barrierLines  = toBullets(getSection(sectionMap, "Entry Barriers"));
+  const riskLines     = toBullets(getSection(sectionMap, "Market Risks"));
+  const compLines     = toBullets(getSection(sectionMap, "Competitive Landscape"));
+  const insightLines  = toBullets(getSection(sectionMap, "Key Insights"));
+
+  // ── RENDER ───────────────────────────────────────────────────────────────
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 animate-fade-in">
+
+      {/* HEADER */}
+      <div className="flex items-center gap-3">
+        <Globe className="text-emerald-400" />
+        <h1 className="text-3xl font-bold">Market Analysis</h1>
+      </div>
+      <p className="text-sm text-emerald-400">● Live Market Intelligence</p>
+
+      {/* TOP 3 CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold mb-4">👤 Target Persona</h2>
+          <BulletList items={personaBullets} color="emerald" />
+        </div>
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold mb-4">⚠️ Pain Points</h2>
+          <BulletList items={painBullets} color="yellow" />
+        </div>
+        <div className="glass-card p-6">
+          <h2 className="text-lg font-semibold mb-4">🔄 Behavior</h2>
+          <BulletList items={behaviorBullets} color="blue" />
+        </div>
+      </div>
+
+      {/* OPPORTUNITY + MARKET STRENGTH */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card title="🚀 Opportunity">
+          <div className="space-y-3">
+            <Box title="TAM" color="emerald" text={tamRaw} />
+            <Box title="SAM" color="blue"    text={samRaw} />
+            <Box title="SOM" color="yellow"  text={somRaw} />
+          </div>
+        </Card>
+        <Card title="📊 Market Strength">
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={marketMetrics}>
+              <XAxis dataKey="name" stroke="#ccc" tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="value" fill="#10b981" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* GROWTH TREND + GROWTH RATE */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold mb-2">📈 Market Growth Trend</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={trendPoints}>
+              <XAxis dataKey="year" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" unit="%" />
+              <Tooltip formatter={(v) => [`${v}%`, "Growth"]} />
+              <Line
+                dataKey="value"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ fill: "#10b981", r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <Card title="📊 Market Growth Rate">
+          <p className="text-gray-300 text-sm leading-relaxed">
+            {growthRateText || "Growth rate data not available."}
+          </p>
+        </Card>
+      </div>
+
+      {/* CUSTOMER SEGMENTS + PERSONAS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card title="🎯 Customer Segments">
+          <BulletList items={segmentLines} color="emerald" />
+        </Card>
+        <Card title="👥 Customer Personas">
+          <BulletList items={personaLines} color="blue" />
+        </Card>
+      </div>
+
+      {/* DEMAND TRENDS + PROBLEM–SOLUTION FIT */}
+      <div className="space-y-4">
+        <motion.div className="glass-card p-6 border border-emerald-500/20">
+          <h2 className="text-emerald-400 font-semibold mb-3">📈 Demand Trends</h2>
+          <BulletList items={demandLines} color="emerald" />
+        </motion.div>
+        <motion.div className="glass-card p-6 border border-pink-500/20">
+          <h2 className="text-pink-400 font-semibold mb-3">🧠 Problem–Solution Fit</h2>
+          <p className="text-gray-300 text-sm leading-relaxed">
+            {fitText || "Problem–solution fit data not available."}
+          </p>
+        </motion.div>
+      </div>
+
+      {/* HOVER CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {[
+          { title: "🛒 Buying Behavior",      items: behaviorLines, color: "emerald" },
+          { title: "🌍 Market Trends",         items: trendLines,    color: "blue"    },
+          { title: "🚧 Entry Barriers",        items: barrierLines,  color: "yellow"  },
+          { title: "⚠️ Market Risks",          items: riskLines,     color: "red"     },
+          { title: "🏆 Competitive Landscape", items: compLines,     color: "purple"  },
+          { title: "💡 Key Insights",          items: insightLines,  color: "emerald" },
+        ].map((item, i) => (
+          <motion.div
+            key={i}
+            whileHover={{ y: -6, scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+            className="glass-card p-6 transition-all duration-300 hover:shadow-[0_0_25px_rgba(16,185,129,0.15)]"
+          >
+            <h2 className={`text-${item.color}-400 font-semibold mb-3`}>
+              {item.title}
+            </h2>
+            <BulletList items={item.items} color={item.color} />
+          </motion.div>
+        ))}
+      </div>
+
+    </div>
+  );
+}

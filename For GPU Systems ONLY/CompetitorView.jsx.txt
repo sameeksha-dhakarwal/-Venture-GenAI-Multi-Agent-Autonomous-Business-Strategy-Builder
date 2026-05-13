@@ -1,0 +1,412 @@
+import { Building2 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+
+export default function CompetitorView({ data }) {
+  if (!data) {
+    return (
+      <div className="text-gray-400 text-center mt-10">
+        Generate strategy first 🚀
+      </div>
+    );
+  }
+
+  const text = data?.competitors || "";
+
+  if (!text || text.startsWith("ERROR:")) {
+    return (
+      <div className="text-red-400 text-center mt-10 px-8">
+        {text.startsWith("ERROR:")
+          ? text
+          : "No competitor data available. Please generate a strategy first."}
+      </div>
+    );
+  }
+
+  // ─── SECTION EXTRACTOR ────────────────────────────────────────────────────
+  // Splits the entire text on ALL-CAPS section headers, then returns
+  // whichever block belongs to `title`. This is immune to regex stop-pattern
+  // failures because we never rely on a lookahead — we just split once and index.
+
+  const SECTION_RE = /\n([A-Z][A-Z &/():-]{1,40}):\s*\n/g;
+
+  const getAllSections = () => {
+    const sections = {};
+    const lines = ("\n" + text).split(SECTION_RE);
+    // lines alternates: [pre, header1, body1, header2, body2, ...]
+    for (let i = 1; i < lines.length - 1; i += 2) {
+      const header = lines[i].trim().toUpperCase();
+      const body   = lines[i + 1] ? lines[i + 1].trim() : "";
+      sections[header] = body;
+    }
+    return sections;
+  };
+
+  const sections = getAllSections();
+
+  // Fuzzy section lookup — finds the first key that contains the search string
+  const getSection = (keyword) => {
+    const key = Object.keys(sections).find((k) =>
+      k.includes(keyword.toUpperCase())
+    );
+    return key ? sections[key] : "";
+  };
+
+  // ─── BULLET PARSER ────────────────────────────────────────────────────────
+  const toBullets = (block) => {
+    if (!block) return [];
+    return block
+      .split("\n")
+      .map((l) => l.replace(/^[\s\-•*\d.]+/, "").trim())
+      .filter((l) => l.length > 4);
+  };
+
+  // ─── COMPETITORS ─────────────────────────────────────────────────────────
+  const parseCompetitors = () => {
+    const section = getSection("COMPETITOR LIST");
+    if (!section) return [];
+
+    const blocks = section.split(/(?=- Name:)/gi).filter(Boolean);
+    return blocks
+      .map((block) => {
+        const getField = (fieldLabel) => {
+          const m = block.match(new RegExp(fieldLabel + ":\\s*(.+)", "i"));
+          return m ? m[1].trim() : "N/A";
+        };
+        return {
+          name:    getField("Name").replace(/^-\s*/, ""),
+          segment: getField("Segment"),
+          pricing: getField("Pricing"),
+          market:  getField("Target Market"),
+        };
+      })
+      .filter((c) => c.name && c.name !== "N/A");
+  };
+
+  const competitors = parseCompetitors();
+
+  // ─── MARKET SHARE ─────────────────────────────────────────────────────────
+  const parseMarketShare = () => {
+    const section = getSection("MARKET SHARE");
+    if (!section) return [];
+
+    return ["Leader", "Mid-tier", "Emerging"].reduce((acc, role) => {
+      const line = section
+        .split("\n")
+        .find((l) => l.toLowerCase().startsWith(role.toLowerCase()));
+      if (!line) return acc;
+
+      const pctMatch  = line.match(/\((\d+)(?:%-?(\d+)?)?%\)/);
+      const nameMatch = line.match(/:\s*(.*?)\s*\(/);
+      const share     = pctMatch ? parseInt(pctMatch[1]) :
+                        role === "Leader" ? 40 : role === "Mid-tier" ? 30 : 15;
+      const name      = nameMatch ? nameMatch[1].trim() : role;
+      const label     = pctMatch
+        ? pctMatch[2]
+          ? `${name} (${pctMatch[1]}%-${pctMatch[2]}%)`
+          : `${name} (${pctMatch[1]}%)`
+        : name;
+
+      acc.push({ role, name, label, share });
+      return acc;
+    }, []);
+  };
+
+  const marketShareData = parseMarketShare();
+
+  const competitorsWithRole = competitors.map((comp) => {
+    const match = marketShareData.find(
+      (m) =>
+        m.name.toLowerCase().includes(comp.name.toLowerCase()) ||
+        comp.name.toLowerCase().includes(m.name.toLowerCase())
+    );
+    return { ...comp, role: match ? match.role : "" };
+  });
+
+  // ─── KEY METRICS ──────────────────────────────────────────────────────────
+  const extractFirstNumber = (pattern) => {
+    const m = text.match(new RegExp(pattern, "i"));
+    return m ? parseInt(m[1]) : null;
+  };
+
+  const keyMetrics = [
+    { name: "Market Share (%)", value: extractFirstNumber("market share[^\\d]*(\\d+)") ?? 25  },
+    { name: "CAC ($)",          value: extractFirstNumber("CAC[^\\d]*(\\d+)")           ?? 120 },
+    { name: "Churn (%)",        value: extractFirstNumber("churn[^\\d]*(\\d+)")         ?? 5   },
+    { name: "Growth (%)",       value: extractFirstNumber("growth[^\\d]*(\\d+)")        ?? 15  },
+  ];
+
+  // ─── PRICING ──────────────────────────────────────────────────────────────
+  const parsePricing = () => {
+    const section = getSection("PRICING");
+
+    const getTier = (label) => {
+      const line = section
+        .split("\n")
+        .find((l) => l.trim().toLowerCase().startsWith(label.toLowerCase() + ":"));
+      if (!line) return "N/A";
+      if (/N\/A/i.test(line)) return "N/A";
+      const d = line.match(/\$?([\d,]+(?:\/\w+)?)/);
+      if (d) return d[1] === "0" ? "$0" : `$${d[1]}`;
+      return "N/A";
+    };
+
+    return {
+      free:       getTier("Free"),
+      pro:        getTier("Pro"),
+      enterprise: getTier("Enterprise"),
+    };
+  };
+
+  const pricing = parsePricing();
+
+  // ─── FEATURE COMPARISON ───────────────────────────────────────────────────
+  // Parse line-by-line inside the FEATURE COMPARISON section so each sub-label
+  // (Features, Pricing, UX, Support, Scalability) is captured individually.
+  const parseFeatures = () => {
+    const section = getSection("FEATURE COMPARISON");
+    const subLabels = ["Features", "Pricing", "UX", "Support", "Scalability"];
+
+    // Split section into lines, then group lines under each sub-label
+    const lines = section.split("\n");
+    const result = {};
+    let current = null;
+
+    for (const line of lines) {
+      const matchedLabel = subLabels.find((lbl) =>
+        line.trim().toLowerCase().startsWith(lbl.toLowerCase() + ":")
+      );
+      if (matchedLabel) {
+        current = matchedLabel;
+        // Grab text after "Label:" on the same line
+        result[current] = line.replace(new RegExp(`^${matchedLabel}:`, "i"), "").trim();
+      } else if (current && line.trim()) {
+        // Continuation line — append
+        result[current] = (result[current] ? result[current] + " " : "") + line.trim();
+      }
+    }
+
+    return subLabels.map((lbl) => ({
+      title: lbl,
+      value: result[lbl] || "N/A",
+    }));
+  };
+
+  const features = parseFeatures();
+
+  // ─── STRENGTHS / WEAKNESSES / GAPS ───────────────────────────────────────
+  const strengths  = toBullets(getSection("STRENGTHS"));
+  const weaknesses = toBullets(getSection("WEAKNESSES"));
+  const gaps       = toBullets(getSection("COMPETITIVE GAPS"));
+
+  // ─── BENCHMARK METRICS ───────────────────────────────────────────────────
+  // Same line-by-line approach as features — no lookahead regex needed
+  const parseBenchmarks = () => {
+    const section = getSection("BENCHMARK METRICS");
+    const subLabels = [
+      { title: "Market Share", key: "Market Share" },
+      { title: "CAC",          key: "CAC"           },
+      { title: "Churn",        key: "Churn"          },
+      { title: "Growth",       key: "Growth Rate"    },
+    ];
+
+    const lines = section.split("\n");
+    const result = {};
+    let current = null;
+
+    for (const line of lines) {
+      const matchedLabel = subLabels.find((lbl) =>
+        line.trim().toLowerCase().startsWith(lbl.key.toLowerCase() + ":")
+      );
+      if (matchedLabel) {
+        current = matchedLabel.key;
+        result[current] = line.replace(new RegExp(`^${matchedLabel.key}:`, "i"), "").trim();
+      } else if (current && line.trim()) {
+        result[current] = (result[current] ? result[current] + " " : "") + line.trim();
+      }
+    }
+
+    return subLabels.map(({ title, key }) => ({
+      title,
+      value: result[key] || "N/A",
+    }));
+  };
+
+  const benchmarkMetrics = parseBenchmarks();
+
+  // ─── ROLE BADGE ───────────────────────────────────────────────────────────
+  const roleBadge = (role) => {
+    if (role === "Leader")   return "bg-green-500/20 text-green-400 border border-green-500/30";
+    if (role === "Mid-tier") return "bg-blue-500/20 text-blue-400 border border-blue-500/30";
+    return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
+  };
+
+  const barColors = ["#3b82f6", "#6366f1", "#8b5cf6"];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 animate-fade-in">
+
+      {/* HEADER */}
+      <div className="flex items-center gap-3">
+        <Building2 className="text-emerald-400" size={28} />
+        <h1 className="text-3xl font-bold">Competitor Analysis</h1>
+      </div>
+
+      {/* ── COMPETITOR CARDS ── */}
+      {competitors.length === 0 ? (
+        <div className="glass-card p-6 text-gray-400">
+          No competitor data found. Try regenerating the analysis.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {competitorsWithRole.map((comp, i) => (
+            <div key={i} className="glass-card p-6">
+              <h2 className="text-lg font-semibold text-white">{comp.name}</h2>
+              {comp.role && (
+                <span className={`mt-2 text-xs font-semibold px-2 py-1 inline-block rounded ${roleBadge(comp.role)}`}>
+                  {comp.role}
+                </span>
+              )}
+              <p className="text-gray-400 text-sm mt-2">Real-world competitor</p>
+              <div className="mt-4 text-sm text-gray-300 space-y-2">
+                <p><b className="text-white">Segment:</b> {comp.segment}</p>
+                <p><b className="text-white">Pricing:</b> {comp.pricing}</p>
+                <p><b className="text-white">Target:</b>  {comp.market}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── CHARTS ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold mb-4">📊 Key Metrics</h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={keyMetrics}>
+              <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ background: "#1e293b", border: "none", borderRadius: 8 }}
+                labelStyle={{ color: "#fff" }}
+              />
+              <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold mb-4">📊 Market Share Distribution</h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart
+              data={
+                marketShareData.length
+                  ? marketShareData.map((d) => ({ ...d, name: d.label }))
+                  : [{ name: "No Data", share: 0 }]
+              }
+            >
+              <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 10 }} interval={0} />
+              <Tooltip
+                contentStyle={{ background: "#1e293b", border: "none", borderRadius: 8 }}
+                labelStyle={{ color: "#fff" }}
+              />
+              <Bar dataKey="share" radius={[4, 4, 0, 0]}>
+                {marketShareData.map((_, i) => (
+                  <Cell key={i} fill={barColors[i % barColors.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+      </div>
+
+      {/* ── PRICING ── */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">💰 Pricing Comparison</h2>
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { tier: "Basic / Free", price: pricing.free       },
+            { tier: "Pro",          price: pricing.pro        },
+            { tier: "Enterprise",   price: pricing.enterprise },
+          ].map((p, i) => (
+            <div key={i} className="bg-white/5 rounded-lg p-4 text-center">
+              <p className="text-gray-400 text-sm">{p.tier}</p>
+              <p className="text-2xl font-bold text-white mt-1">{p.price}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── FEATURE COMPARISON ── */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">📊 Feature Comparison</h2>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          {features.map((f, i) => (
+            <div key={i} className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-400 font-medium mb-2">{f.title}</p>
+              <p className="text-sm text-gray-300 leading-relaxed">{f.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── STRENGTHS & WEAKNESSES ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold text-green-400 mb-4">💪 Strengths</h2>
+          <div className="space-y-2">
+            {strengths.length > 0
+              ? strengths.map((s, i) => <p key={i} className="text-gray-300 text-sm">• {s}</p>)
+              : <p className="text-gray-500 text-sm">No data</p>}
+          </div>
+        </div>
+        <div className="glass-card p-6">
+          <h2 className="text-xl font-semibold text-red-400 mb-4">⚠️ Weaknesses</h2>
+          <div className="space-y-2">
+            {weaknesses.length > 0
+              ? weaknesses.map((w, i) => <p key={i} className="text-gray-300 text-sm">• {w}</p>)
+              : <p className="text-gray-500 text-sm">No data</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* ── COMPETITIVE GAPS ── */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">⚡ Competitive Gaps</h2>
+        {gaps.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {gaps.map((g, i) => (
+              <div key={i} className="bg-white/5 p-4 rounded-lg text-sm text-gray-300 leading-relaxed">
+                {g}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 text-sm">No gap data found.</p>
+        )}
+      </div>
+
+      {/* ── BENCHMARK METRICS ── */}
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold mb-4">📈 Benchmark Metrics</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {benchmarkMetrics.map((m, i) => (
+            <div key={i} className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-400 font-medium mb-2">{m.title}</p>
+              <p className="text-sm text-gray-300 leading-relaxed">{m.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
